@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>小海不想写作业的博客</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+    <style>
+        /* ===== 样式（精简版，可自行美化） ===== */
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background:#f5f7fa; color:#2d3436; padding:20px; }
+        .container { max-width:880px; margin:0 auto; background:#fff; border-radius:20px; box-shadow:0 20px 60px rgba(0,0,0,0.08); overflow:hidden; }
+        header { background:linear-gradient(135deg,#2d3436,#434a4d); color:#fff; padding:28px 36px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; }
+        .logo { font-size:26px; font-weight:700; }
+        .logo i { color:#fdcb6e; margin-right:10px; }
+        .nav-links a { color:rgba(255,255,255,0.8); margin-left:20px; cursor:pointer; }
+        .nav-links a:hover { color:#fff; }
+        .nav-links .admin-btn { background:rgba(255,255,255,0.15); padding:6px 16px; border-radius:30px; }
+        .main-content { padding:40px 36px; }
+        .view { display:none; animation:fadeIn 0.3s; }
+        .view.active { display:block; }
+        @keyframes fadeIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+        .blog-card { background:#f8f9fa; border-radius:16px; padding:24px 28px; margin-bottom:20px; cursor:pointer; border-left:5px solid #fdcb6e; }
+        .blog-card:hover { transform:translateY(-3px); box-shadow:0 8px 25px rgba(0,0,0,0.06); }
+        .blog-card h3 { font-size:20px; }
+        .meta { font-size:13px; color:#95a5a6; }
+        .summary { margin-top:10px; color:#555; }
+        .detail-back { color:#0984e3; cursor:pointer; }
+        .login-form { max-width:380px; margin:30px auto; background:#f8f9fa; padding:32px 28px; border-radius:16px; }
+        .login-form input { width:100%; padding:10px 14px; border:2px solid #dfe6e9; border-radius:10px; margin-bottom:14px; }
+        .login-btn { width:100%; padding:11px; background:#0984e3; color:#fff; border:none; border-radius:10px; font-weight:600; cursor:pointer; }
+        .login-error { color:#e17055; text-align:center; display:none; }
+        .admin-section { background:#f8f9fa; border-radius:16px; padding:24px 28px; margin-bottom:20px; }
+        .add-form input, .add-form textarea { width:100%; padding:10px 14px; border:2px solid #dfe6e9; border-radius:10px; margin-bottom:12px; font-family:inherit; }
+        .add-form textarea { min-height:120px; resize:vertical; }
+        .submit-btn { background:#00b894; color:#fff; border:none; padding:10px 28px; border-radius:10px; cursor:pointer; }
+        .admin-blog-item { display:flex; justify-content:space-between; padding:12px 0; border-bottom:1px solid #e9ecef; }
+        .del-btn { background:#e17055; color:#fff; border:none; padding:6px 16px; border-radius:8px; cursor:pointer; }
+        .empty-tip { color:#95a5a6; text-align:center; padding:30px 0; }
+        .toast-container { position:fixed; bottom:30px; right:30px; z-index:9999; }
+        .toast { background:#2d3436; color:#fff; padding:14px 20px; border-radius:12px; margin-bottom:10px; }
+        .toast.success { background:#00b894; }
+        .toast.error { background:#e17055; }
+        .toast.info { background:#0984e3; }
+        @media (max-width:640px) { header { flex-direction:column; align-items:stretch; } .main-content { padding:24px 18px; } }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <div class="logo"><i class="fas fa-feather-alt"></i> MyBlog</div>
+        <div class="nav-links">
+            <a data-view="home"><i class="fas fa-home"></i> 首页</a>
+            <a data-view="admin" class="admin-btn"><i class="fas fa-user-cog"></i> 管理</a>
+        </div>
+    </header>
+    <div class="main-content">
+        <!-- 首页 -->
+        <div id="view-home" class="view active">
+            <h1> 所有文章</h1>
+            <p id="post-count">共 0 篇</p>
+            <div id="blog-list"><div class="empty-tip">加载中...</div></div>
+        </div>
+        <!-- 详情 -->
+        <div id="view-detail" class="view">
+            <div class="detail-back" onclick="goHome()"><i class="fas fa-arrow-left"></i> 返回</div>
+            <div id="detail-content"></div>
+        </div>
+        <!-- 管理 -->
+        <div id="view-admin" class="view">
+            <h2><i class="fas fa-user-shield"></i> 管理后台</h2>
+            <p id="admin-status">请登录</p>
+            <div id="admin-login-box">
+                <div class="login-form">
+                    <h4>管理员登录</h4>
+                    <label>用户名</label><input type="text" id="login-username" value="xiaohai" autocomplete="off" />
+<label>密码</label><input type="password" id="login-password" value="114514" autocomplete="new-password" />
+                    <button class="login-btn" onclick="handleLogin()">登录</button>
+                    <div class="login-error" id="login-error">用户名或密码错误</div>
+                </div>
+            </div>
+            <div id="admin-panel" style="display:none;">
+                <div class="admin-section">
+                    <h4><i class="fas fa-plus-circle"></i> 发布新文章</h4>
+                    <form class="add-form" onsubmit="handleAddPost(event)">
+                        <input type="text" id="add-title" placeholder="标题" required />
+                        <textarea id="add-content" placeholder="正文" required></textarea>
+                        <button type="submit" class="submit-btn">发布</button>
+                    </form>
+                </div>
+                <div class="admin-section">
+                    <h4><i class="fas fa-list-ul"></i> 管理文章</h4>
+                    <div id="admin-post-list"></div>
+                </div>
+                <button onclick="handleLogout()" style="background:transparent;border:1px solid #ddd;padding:8px 20px;border-radius:8px;cursor:pointer;">退出登录</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+    // ========== 全局配置 ==========
+    const API_BASE = '/api';
+
+    // ========== 工具函数 ==========
+    function showToast(msg, type='info') {
+        const container = document.getElementById('toast-container');
+        const el = document.createElement('div');
+        el.className = `toast ${type}`;
+        el.innerHTML = msg;
+        container.appendChild(el);
+        setTimeout(() => { el.style.opacity='0'; setTimeout(()=>el.remove(),300); }, 3000);
+    }
+
+    async function apiFetch(endpoint, options={}) {
+        const res = await fetch(API_BASE+endpoint, {
+            ...options,
+            headers: { 'Content-Type': 'application/json', ...(options.headers||{}) }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || '请求失败');
+        return data;
+    }
+
+    function formatDate(ts) {
+        const d = new Date(ts);
+        return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // ========== 状态 ==========
+    let posts = [];
+    let isAdmin = false;
+    let currentView = 'home';
+
+    // ========== DOM 引用 ==========
+    const $ = (s) => document.querySelector(s);
+    const $$ = (s) => document.querySelectorAll(s);
+
+    // ========== 视图渲染 ==========
+    async function loadPosts() {
+        try {
+            const data = await apiFetch('/posts');
+            posts = data.posts || [];
+            renderPostList();
+        } catch(err) {
+            showToast('加载文章失败: '+err.message, 'error');
+            document.getElementById('blog-list').innerHTML = '<div class="empty-tip">加载失败</div>';
+        }
+    }
+
+    function renderPostList() {
+        const list = document.getElementById('blog-list');
+        const count = document.getElementById('post-count');
+        if (!posts.length) {
+            list.innerHTML = '<div class="empty-tip"> 暂无文章</div>';
+            count.textContent = '共 0 篇';
+            return;
+        }
+        count.textContent = `共 ${posts.length} 篇`;
+        const sorted = [...posts].sort((a,b) => b.createdAt - a.createdAt);
+        list.innerHTML = sorted.map(p => `
+            <div class="blog-card" onclick="viewPost('${p.id}')">
+                <h3>${escapeHtml(p.title)}</h3>
+                <div class="meta"><span><i class="far fa-calendar-alt"></i> ${formatDate(p.createdAt)}</span> <span><i class="far fa-eye"></i> ${p.views||0}</span></div>
+                <div class="summary">${escapeHtml(p.content.slice(0,120))}${p.content.length>120?'...':''}</div>
+            </div>
+        `).join('');
+    }
+
+    async function viewPost(id) {
+        try {
+            const data = await apiFetch(`/posts/${id}`);
+            const post = data.post;
+            if (!post) throw new Error('文章不存在');
+            switchView('detail');
+            document.getElementById('detail-content').innerHTML = `
+                <h1 class="detail-title">${escapeHtml(post.title)}</h1>
+                <div class="detail-meta"><i class="far fa-calendar-alt"></i> ${formatDate(post.createdAt)} &nbsp;|&nbsp; <i class="far fa-eye"></i> ${post.views||0}</div>
+                <div class="detail-content">${escapeHtml(post.content)}</div>
+            `;
+        } catch(err) {
+            showToast('加载文章失败: '+err.message, 'error');
+        }
+    }
+
+    function goHome() { switchView('home'); }
+
+    // ========== 视图切换 ==========
+    function switchView(view) {
+        currentView = view;
+        $$('.view').forEach(v => v.classList.remove('active'));
+        if (view === 'home') {
+            document.getElementById('view-home').classList.add('active');
+            loadPosts();
+        } else if (view === 'detail') {
+            document.getElementById('view-detail').classList.add('active');
+        } else if (view === 'admin') {
+            document.getElementById('view-admin').classList.add('active');
+            loadAdminPanel();
+        }
+        $$('.nav-links a').forEach(a => a.style.opacity='0.7');
+        $$('.nav-links a').forEach(a => { if (a.dataset.view===view) a.style.opacity='1'; });
+        window.scrollTo(0,0);
+    }
+
+    $$('.nav-links a').forEach(a => {
+        a.addEventListener('click', (e) => {
+            e.preventDefault();
+            const view = a.dataset.view;
+            if (view === 'admin' && !isAdmin) {
+                switchView('admin');
+            } else {
+                switchView(view);
+            }
+        });
+    });
+
+    // ========== 管理后台 ==========
+    async function loadAdminPanel() {
+        try {
+            const data = await apiFetch('/auth/status');
+            isAdmin = data.isAdmin;
+        } catch {
+            isAdmin = false;
+        }
+        if (isAdmin) {
+            document.getElementById('admin-login-box').style.display = 'none';
+            document.getElementById('admin-panel').style.display = 'block';
+            document.getElementById('admin-status').textContent = '✅ 已登录';
+            try {
+                const data = await apiFetch('/posts');
+                posts = data.posts || [];
+                renderAdminPostList();
+            } catch(err) {
+                showToast('加载文章失败', 'error');
+            }
+        } else {
+            document.getElementById('admin-login-box').style.display = 'block';
+            document.getElementById('admin-panel').style.display = 'none';
+            document.getElementById('admin-status').textContent = '🔒 请登录';
+            document.getElementById('login-error').classList.remove('show');
+        }
+    }
+
+    function renderAdminPostList() {
+        const container = document.getElementById('admin-post-list');
+        if (!posts.length) {
+            container.innerHTML = '<div class="empty-tip">暂无文章</div>';
+            return;
+        }
+        const sorted = [...posts].sort((a,b) => b.createdAt - a.createdAt);
+        container.innerHTML = sorted.map(p => `
+            <div class="admin-blog-item">
+                <div><span class="title">${escapeHtml(p.title)}</span> <span class="date">${formatDate(p.createdAt)}</span></div>
+                <button class="del-btn" onclick="handleDelete('${p.id}')"><i class="fas fa-trash-alt"></i> 删除</button>
+            </div>
+        `).join('');
+    }
+
+    async function handleLogin() {
+        const username = document.getElementById('login-username').value.trim();
+        const password = document.getElementById('login-password').value.trim();
+        try {
+            const data = await apiFetch('/auth/login', {
+                method: 'POST',
+                body: JSON.stringify({ username, password })
+            });
+            if (data.success) {
+                isAdmin = true;
+                showToast('登录成功', 'success');
+                loadAdminPanel();
+                if (currentView === 'admin') renderAdminPostList();
+            } else {
+                document.getElementById('login-error').textContent = '用户名或密码错误';
+                document.getElementById('login-error').classList.add('show');
+            }
+        } catch(err) {
+            showToast('登录失败: '+err.message, 'error');
+        }
+    }
+
+    async function handleLogout() {
+        try {
+            await apiFetch('/auth/logout', { method: 'POST' });
+            isAdmin = false;
+            showToast('已退出', 'info');
+            loadAdminPanel();
+            if (currentView === 'admin') switchView('admin');
+        } catch(err) {
+            showToast('退出失败', 'error');
+        }
+    }
+
+    async function handleAddPost(e) {
+        e.preventDefault();
+        if (!isAdmin) { showToast('请先登录', 'error'); return; }
+        const title = document.getElementById('add-title').value.trim();
+        const content = document.getElementById('add-content').value.trim();
+        if (!title || !content) { showToast('标题和内容不能为空', 'error'); return; }
+        try {
+            const data = await apiFetch('/posts', {
+                method: 'POST',
+                body: JSON.stringify({ title, content })
+            });
+            showToast('发布成功', 'success');
+            document.getElementById('add-title').value = '';
+            document.getElementById('add-content').value = '';
+            const listData = await apiFetch('/posts');
+            posts = listData.posts || [];
+            renderAdminPostList();
+            if (currentView === 'home') renderPostList();
+        } catch(err) {
+            showToast('发布失败: '+err.message, 'error');
+        }
+    }
+
+    async function handleDelete(id) {
+        if (!confirm('确认删除？')) return;
+        try {
+            await apiFetch(`/posts/${id}`, { method: 'DELETE' });
+            showToast('已删除', 'success');
+            const listData = await apiFetch('/posts');
+            posts = listData.posts || [];
+            renderAdminPostList();
+            if (currentView === 'home') renderPostList();
+            if (currentView === 'detail') goHome();
+        } catch(err) {
+            showToast('删除失败: '+err.message, 'error');
+        }
+    }
+
+    document.getElementById('login-password').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleLogin();
+    });
+    document.getElementById('login-username').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleLogin();
+    });
+
+    // ========== 初始化 ==========
+    window.onload = function() {
+        switchView('home');
+    };
+
+    window.viewPost = viewPost;
+    window.goHome = goHome;
+    window.handleLogin = handleLogin;
+    window.handleLogout = handleLogout;
+    window.handleAddPost = handleAddPost;
+    window.handleDelete = handleDelete;
+    window.switchView = switchView;
+</script>
+</body>
+</html>
