@@ -6,7 +6,6 @@
     <title>小海不想写作业的博客</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     <style>
-        /* ===== 样式（精简版，可自行美化） ===== */
         * { margin:0; padding:0; box-sizing:border-box; }
         body { font-family: 'Segoe UI', sans-serif; background:#f5f7fa; color:#2d3436; padding:20px; }
         .container { max-width:880px; margin:0 auto; background:#fff; border-radius:20px; box-shadow:0 20px 60px rgba(0,0,0,0.08); overflow:hidden; }
@@ -42,6 +41,14 @@
         .toast.success { background:#00b894; }
         .toast.error { background:#e17055; }
         .toast.info { background:#0984e3; }
+        .post-author { font-size:12px; color:#888; margin-left:10px; }
+        .user-item { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee; align-items:center; }
+        .user-item .del-btn { background:#e17055; color:#fff; border:none; padding:2px 12px; border-radius:6px; cursor:pointer; }
+        .user-item .reset-btn { background:#0984e3; color:#fff; border:none; padding:2px 12px; border-radius:6px; cursor:pointer; margin-right:6px; }
+        .admin-only { display:block; }
+        .super-only { display:none; }
+        .change-pwd-area { margin-top:10px; }
+        .change-pwd-area input { padding:6px 10px; border:2px solid #dfe6e9; border-radius:6px; margin-right:6px; width:150px; }
         @media (max-width:640px) { header { flex-direction:column; align-items:stretch; } .main-content { padding:24px 18px; } }
     </style>
 </head>
@@ -57,7 +64,7 @@
     <div class="main-content">
         <!-- 首页 -->
         <div id="view-home" class="view active">
-            <h1> 所有文章</h1>
+            <h1>所有文章</h1>
             <p id="post-count">共 0 篇</p>
             <div id="blog-list"><div class="empty-tip">加载中...</div></div>
         </div>
@@ -73,26 +80,49 @@
             <div id="admin-login-box">
                 <div class="login-form">
                     <h4>管理员登录</h4>
-                    <label>用户名</label><input type="text" id="login-username"  autocomplete="off" />
-<label>密码</label><input type="password" id="login-password" autocomplete="new-password" />
+                    <label>用户名</label><input type="text" id="login-username" placeholder="用户名" autocomplete="off" />
+                    <label>密码</label><input type="password" id="login-password" placeholder="密码" autocomplete="new-password" />
                     <button class="login-btn" onclick="handleLogin()">登录</button>
                     <div class="login-error" id="login-error">用户名或密码错误</div>
                 </div>
             </div>
             <div id="admin-panel" style="display:none;">
-                <div class="admin-section">
-                    <h4><i class="fas fa-plus-circle"></i> 发布新文章</h4>
-                    <form class="add-form" onsubmit="handleAddPost(event)">
-                        <input type="text" id="add-title" placeholder="标题" required />
-                        <textarea id="add-content" placeholder="正文" required></textarea>
-                        <button type="submit" class="submit-btn">发布</button>
-                    </form>
+                <div id="admin-content">
+                    <!-- 修改密码（所有管理员可见） -->
+                    <div class="admin-section admin-only change-pwd-area">
+                        <h4><i class="fas fa-key"></i> 修改密码</h4>
+                        <div>
+                            <input type="password" id="old-pwd" placeholder="旧密码" />
+                            <input type="password" id="new-pwd" placeholder="新密码" />
+                            <button class="submit-btn" onclick="handleChangePassword()">修改</button>
+                        </div>
+                    </div>
+                    <!-- 发布文章 -->
+                    <div class="admin-section admin-only">
+                        <h4><i class="fas fa-plus-circle"></i> 发布新文章</h4>
+                        <form class="add-form" onsubmit="handleAddPost(event)">
+                            <input type="text" id="add-title" placeholder="标题" required />
+                            <textarea id="add-content" placeholder="正文" required></textarea>
+                            <button type="submit" class="submit-btn">发布</button>
+                        </form>
+                    </div>
+                    <!-- 我的文章列表 -->
+                    <div class="admin-section admin-only">
+                        <h4><i class="fas fa-list-ul"></i> 我的文章</h4>
+                        <div id="admin-post-list"></div>
+                    </div>
+                    <!-- 用户管理（仅超级管理员） -->
+                    <div class="admin-section super-only" id="user-mgmt-section">
+                        <h4><i class="fas fa-users-cog"></i> 管理员管理</h4>
+                        <div style="margin-bottom: 10px;">
+                            <input type="text" id="new-username" placeholder="新管理员用户名" />
+                            <input type="password" id="new-password" placeholder="密码" />
+                            <button onclick="handleCreateUser()" class="submit-btn" style="padding:6px 16px;">创建</button>
+                        </div>
+                        <div id="user-list"></div>
+                    </div>
                 </div>
-                <div class="admin-section">
-                    <h4><i class="fas fa-list-ul"></i> 管理文章</h4>
-                    <div id="admin-post-list"></div>
-                </div>
-                <button onclick="handleLogout()" style="background:transparent;border:1px solid #ddd;padding:8px 20px;border-radius:8px;cursor:pointer;">退出登录</button>
+                <button onclick="handleLogout()" style="background:transparent;border:1px solid #ddd;padding:8px 20px;border-radius:8px;cursor:pointer;margin-top:10px;">退出登录</button>
             </div>
         </div>
     </div>
@@ -102,6 +132,9 @@
 <script>
     // ========== 全局配置 ==========
     const API_BASE = '/api';
+    let currentUser = null;
+    let posts = [];
+    let currentView = 'home';
 
     // ========== 工具函数 ==========
     function showToast(msg, type='info') {
@@ -135,16 +168,7 @@
         return div.innerHTML;
     }
 
-    // ========== 状态 ==========
-    let posts = [];
-    let isAdmin = false;
-    let currentView = 'home';
-
-    // ========== DOM 引用 ==========
-    const $ = (s) => document.querySelector(s);
-    const $$ = (s) => document.querySelectorAll(s);
-
-    // ========== 视图渲染 ==========
+    // ========== 视图 ==========
     async function loadPosts() {
         try {
             const data = await apiFetch('/posts');
@@ -160,7 +184,7 @@
         const list = document.getElementById('blog-list');
         const count = document.getElementById('post-count');
         if (!posts.length) {
-            list.innerHTML = '<div class="empty-tip"> 暂无文章</div>';
+            list.innerHTML = '<div class="empty-tip">暂无文章</div>';
             count.textContent = '共 0 篇';
             return;
         }
@@ -168,9 +192,9 @@
         const sorted = [...posts].sort((a,b) => b.createdAt - a.createdAt);
         list.innerHTML = sorted.map(p => `
             <div class="blog-card" onclick="viewPost('${p.id}')">
-                <h3>${escapeHtml(p.title)}</h3>
+                <h3>${escapeHtml(p.title)} <span class="post-author">by ${escapeHtml(p.author || '未知')}</span></h3>
                 <div class="meta"><span><i class="far fa-calendar-alt"></i> ${formatDate(p.createdAt)}</span> <span><i class="far fa-eye"></i> ${p.views||0}</span></div>
-                <div class="summary">${escapeHtml(p.content.slice(0,120))}${p.content.length>120?'...':''}</div>
+                <div class="summary">${escapeHtml(p.content ? p.content.slice(0,120) : '')}${p.content && p.content.length>120?'...':''}</div>
             </div>
         `).join('');
     }
@@ -183,7 +207,7 @@
             switchView('detail');
             document.getElementById('detail-content').innerHTML = `
                 <h1 class="detail-title">${escapeHtml(post.title)}</h1>
-                <div class="detail-meta"><i class="far fa-calendar-alt"></i> ${formatDate(post.createdAt)} &nbsp;|&nbsp; <i class="far fa-eye"></i> ${post.views||0}</div>
+                <div class="detail-meta"><i class="far fa-calendar-alt"></i> ${formatDate(post.createdAt)} &nbsp;|&nbsp; <i class="far fa-eye"></i> ${post.views||0} &nbsp;|&nbsp; 作者: ${escapeHtml(post.author || '未知')}</div>
                 <div class="detail-content">${escapeHtml(post.content)}</div>
             `;
         } catch(err) {
@@ -193,10 +217,9 @@
 
     function goHome() { switchView('home'); }
 
-    // ========== 视图切换 ==========
     function switchView(view) {
         currentView = view;
-        $$('.view').forEach(v => v.classList.remove('active'));
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
         if (view === 'home') {
             document.getElementById('view-home').classList.add('active');
             loadPosts();
@@ -206,16 +229,16 @@
             document.getElementById('view-admin').classList.add('active');
             loadAdminPanel();
         }
-        $$('.nav-links a').forEach(a => a.style.opacity='0.7');
-        $$('.nav-links a').forEach(a => { if (a.dataset.view===view) a.style.opacity='1'; });
+        document.querySelectorAll('.nav-links a').forEach(a => a.style.opacity='0.7');
+        document.querySelectorAll('.nav-links a').forEach(a => { if (a.dataset.view===view) a.style.opacity='1'; });
         window.scrollTo(0,0);
     }
 
-    $$('.nav-links a').forEach(a => {
+    document.querySelectorAll('.nav-links a').forEach(a => {
         a.addEventListener('click', (e) => {
             e.preventDefault();
             const view = a.dataset.view;
-            if (view === 'admin' && !isAdmin) {
+            if (view === 'admin' && !currentUser) {
                 switchView('admin');
             } else {
                 switchView(view);
@@ -223,30 +246,45 @@
         });
     });
 
-    // ========== 管理后台 ==========
+    // ========== 管理 ==========
     async function loadAdminPanel() {
         try {
             const data = await apiFetch('/auth/status');
-            isAdmin = data.isAdmin;
-        } catch {
-            isAdmin = false;
-        }
-        if (isAdmin) {
-            document.getElementById('admin-login-box').style.display = 'none';
-            document.getElementById('admin-panel').style.display = 'block';
-            document.getElementById('admin-status').textContent = '✅ 已登录';
-            try {
-                const data = await apiFetch('/posts');
-                posts = data.posts || [];
-                renderAdminPostList();
-            } catch(err) {
-                showToast('加载文章失败', 'error');
+            if (data.isAdmin && data.user) {
+                currentUser = data.user;
+                document.getElementById('admin-login-box').style.display = 'none';
+                document.getElementById('admin-panel').style.display = 'block';
+                document.getElementById('admin-status').textContent = `✅ 已登录 (${currentUser.username})`;
+                document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
+                if (currentUser.role === 'super_admin') {
+                    document.querySelectorAll('.super-only').forEach(el => el.style.display = 'block');
+                } else {
+                    document.querySelectorAll('.super-only').forEach(el => el.style.display = 'none');
+                }
+                await loadAdminPosts();
+                if (currentUser.role === 'super_admin') loadUserList();
+            } else {
+                currentUser = null;
+                document.getElementById('admin-login-box').style.display = 'block';
+                document.getElementById('admin-panel').style.display = 'none';
+                document.getElementById('admin-status').textContent = '🔒 请登录';
+                document.getElementById('login-error').classList.remove('show');
             }
-        } else {
+        } catch(err) {
+            currentUser = null;
             document.getElementById('admin-login-box').style.display = 'block';
             document.getElementById('admin-panel').style.display = 'none';
             document.getElementById('admin-status').textContent = '🔒 请登录';
-            document.getElementById('login-error').classList.remove('show');
+        }
+    }
+
+    async function loadAdminPosts() {
+        try {
+            const data = await apiFetch('/posts');
+            posts = data.posts || [];
+            renderAdminPostList();
+        } catch(err) {
+            showToast('加载文章失败', 'error');
         }
     }
 
@@ -259,12 +297,111 @@
         const sorted = [...posts].sort((a,b) => b.createdAt - a.createdAt);
         container.innerHTML = sorted.map(p => `
             <div class="admin-blog-item">
-                <div><span class="title">${escapeHtml(p.title)}</span> <span class="date">${formatDate(p.createdAt)}</span></div>
+                <div><span class="title">${escapeHtml(p.title)}</span> <span class="date">${formatDate(p.createdAt)}</span> <span style="font-size:12px;color:#888;">by ${escapeHtml(p.author || '未知')}</span></div>
                 <button class="del-btn" onclick="handleDelete('${p.id}')"><i class="fas fa-trash-alt"></i> 删除</button>
             </div>
         `).join('');
     }
 
+    // 用户管理
+    async function loadUserList() {
+        if (!currentUser || currentUser.role !== 'super_admin') return;
+        try {
+            const data = await apiFetch('/users');
+            const users = data.users || [];
+            const container = document.getElementById('user-list');
+            if (!users.length) {
+                container.innerHTML = '<div class="empty-tip">暂无其他管理员</div>';
+                return;
+            }
+            container.innerHTML = users.map(u => `
+                <div class="user-item">
+                    <span>${escapeHtml(u.username)} (${u.role})</span>
+                    <div>
+                        ${u.role !== 'super_admin' ? `<button class="del-btn" onclick="handleDeleteUser('${u.username}')">删除</button>` : ''}
+                        ${u.username === currentUser.username ? '' : `<button class="reset-btn" onclick="handleResetPassword('${u.username}')">重置密码</button>`}
+                    </div>
+                </div>
+            `).join('');
+        } catch(err) {
+            showToast('加载用户列表失败', 'error');
+        }
+    }
+
+    async function handleCreateUser() {
+        const username = document.getElementById('new-username').value.trim();
+        const password = document.getElementById('new-password').value.trim();
+        if (!username || !password) {
+            showToast('请填写用户名和密码', 'error');
+            return;
+        }
+        try {
+            await apiFetch('/users', {
+                method: 'POST',
+                body: JSON.stringify({ username, password })
+            });
+            showToast('管理员创建成功', 'success');
+            document.getElementById('new-username').value = '';
+            document.getElementById('new-password').value = '';
+            loadUserList();
+        } catch(err) {
+            showToast('创建失败: '+err.message, 'error');
+        }
+    }
+
+    async function handleDeleteUser(username) {
+        if (!confirm(`确认删除管理员 ${username}？其所有文章也将被删除。`)) return;
+        try {
+            await apiFetch(`/users/${username}`, { method: 'DELETE' });
+            showToast('管理员已删除', 'success');
+            loadUserList();
+            loadAdminPosts();
+        } catch(err) {
+            showToast('删除失败: '+err.message, 'error');
+        }
+    }
+
+    // 修改密码
+    async function handleChangePassword() {
+        if (!currentUser) { showToast('请先登录', 'error'); return; }
+        const oldPwd = document.getElementById('old-pwd').value.trim();
+        const newPwd = document.getElementById('new-pwd').value.trim();
+        if (!newPwd) { showToast('新密码不能为空', 'error'); return; }
+        if (newPwd.length < 3) { showToast('新密码长度至少3位', 'error'); return; }
+
+        // 如果是超级管理员改别人，不需要旧密码，但这里我们只做自己修改，所以需要旧密码
+        try {
+            await apiFetch(`/users/${currentUser.username}/password`, {
+                method: 'PUT',
+                body: JSON.stringify({ oldPassword: oldPwd, newPassword: newPwd })
+            });
+            showToast('密码修改成功，请重新登录', 'success');
+            document.getElementById('old-pwd').value = '';
+            document.getElementById('new-pwd').value = '';
+            // 退出登录，强制重新认证
+            await handleLogout();
+        } catch(err) {
+            showToast('修改失败: '+err.message, 'error');
+        }
+    }
+
+    // 超级管理员重置他人密码（前端调用的函数）
+    async function handleResetPassword(username) {
+        if (!confirm(`确认重置用户 ${username} 的密码为 "123456"？`)) return;
+        try {
+            // 这里调用修改密码接口，但新密码固定为 123456，且旧密码传空（因为超级管理员无需旧密码）
+            // 但我们的 API 要求超级管理员修改别人时，不检查旧密码，所以我们可以传任意值
+            await apiFetch(`/users/${username}/password`, {
+                method: 'PUT',
+                body: JSON.stringify({ oldPassword: '', newPassword: '123456' })
+            });
+            showToast(`用户 ${username} 的密码已重置为 123456`, 'success');
+        } catch(err) {
+            showToast('重置失败: '+err.message, 'error');
+        }
+    }
+
+    // ========== 登录/登出 ==========
     async function handleLogin() {
         const username = document.getElementById('login-username').value.trim();
         const password = document.getElementById('login-password').value.trim();
@@ -273,11 +410,10 @@
                 method: 'POST',
                 body: JSON.stringify({ username, password })
             });
-            if (data.success) {
-                isAdmin = true;
+            if (data.success && data.user) {
+                currentUser = data.user;
                 showToast('登录成功', 'success');
                 loadAdminPanel();
-                if (currentView === 'admin') renderAdminPostList();
             } else {
                 document.getElementById('login-error').textContent = '用户名或密码错误';
                 document.getElementById('login-error').classList.add('show');
@@ -290,7 +426,7 @@
     async function handleLogout() {
         try {
             await apiFetch('/auth/logout', { method: 'POST' });
-            isAdmin = false;
+            currentUser = null;
             showToast('已退出', 'info');
             loadAdminPanel();
             if (currentView === 'admin') switchView('admin');
@@ -299,44 +435,42 @@
         }
     }
 
+    // ========== 文章操作 ==========
     async function handleAddPost(e) {
         e.preventDefault();
-        if (!isAdmin) { showToast('请先登录', 'error'); return; }
+        if (!currentUser) { showToast('请先登录', 'error'); return; }
         const title = document.getElementById('add-title').value.trim();
         const content = document.getElementById('add-content').value.trim();
         if (!title || !content) { showToast('标题和内容不能为空', 'error'); return; }
         try {
-            const data = await apiFetch('/posts', {
+            await apiFetch('/posts', {
                 method: 'POST',
                 body: JSON.stringify({ title, content })
             });
             showToast('发布成功', 'success');
             document.getElementById('add-title').value = '';
             document.getElementById('add-content').value = '';
-            const listData = await apiFetch('/posts');
-            posts = listData.posts || [];
-            renderAdminPostList();
-            if (currentView === 'home') renderPostList();
+            await loadAdminPosts();
+            if (currentView === 'home') loadPosts();
         } catch(err) {
             showToast('发布失败: '+err.message, 'error');
         }
     }
 
     async function handleDelete(id) {
-        if (!confirm('确认删除？')) return;
+        if (!confirm('确认删除该文章？')) return;
         try {
             await apiFetch(`/posts/${id}`, { method: 'DELETE' });
             showToast('已删除', 'success');
-            const listData = await apiFetch('/posts');
-            posts = listData.posts || [];
-            renderAdminPostList();
-            if (currentView === 'home') renderPostList();
+            await loadAdminPosts();
+            if (currentView === 'home') loadPosts();
             if (currentView === 'detail') goHome();
         } catch(err) {
             showToast('删除失败: '+err.message, 'error');
         }
     }
 
+    // 回车登录
     document.getElementById('login-password').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') handleLogin();
     });
@@ -344,17 +478,19 @@
         if (e.key === 'Enter') handleLogin();
     });
 
-    // ========== 初始化 ==========
-    window.onload = function() {
-        switchView('home'); 
-    };
+    window.onload = function() { switchView('home'); };
 
+    // 暴露全局
     window.viewPost = viewPost;
     window.goHome = goHome;
     window.handleLogin = handleLogin;
     window.handleLogout = handleLogout;
     window.handleAddPost = handleAddPost;
     window.handleDelete = handleDelete;
+    window.handleCreateUser = handleCreateUser;
+    window.handleDeleteUser = handleDeleteUser;
+    window.handleChangePassword = handleChangePassword;
+    window.handleResetPassword = handleResetPassword;
     window.switchView = switchView;
 </script>
 </body>

@@ -7,24 +7,24 @@ const { Octokit } = require('@octokit/rest');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ---------- 从环境变量读取配置 ----------
+// ---------- 环境变量（Render 需设置） ----------
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-const REPO_NAME = process.env.REPO_NAME; // 格式: 'owner/repo'
+const REPO_NAME = process.env.REPO_NAME;
 if (!GITHUB_TOKEN || !REPO_NAME) {
-    console.error('❌ 请设置环境变量 GITHUB_TOKEN 和 REPO_NAME');
+    console.error('❌ 缺少 GITHUB_TOKEN 或 REPO_NAME 环境变量');
     process.exit(1);
 }
 const [OWNER, REPO] = REPO_NAME.split('/');
-
 const octokit = new Octokit({ auth: GITHUB_TOKEN });
+
 const INDEX_PATH = 'index.json';
 const POSTS_DIR = 'posts';
 const USERS_PATH = 'users.json';
 
-// ---------- 超级管理员（可在此修改初始账号密码） ----------
+// ---------- 超级管理员 ----------
 const SUPER_ADMIN = {
     username: 'xiaohai',
-    password: '114514', // 建议改为强密码
+    password: '114514',
     role: 'super_admin'
 };
 
@@ -33,14 +33,9 @@ function generateId(title, content) {
     return crypto.createHash('md5').update(title + content).digest('hex').slice(0, 8);
 }
 
-// ---------- GitHub 文件操作 ----------
 async function getFileContent(path) {
     try {
-        const { data } = await octokit.repos.getContent({
-            owner: OWNER,
-            repo: REPO,
-            path,
-        });
+        const { data } = await octokit.repos.getContent({ owner: OWNER, repo: REPO, path });
         return Buffer.from(data.content, 'base64').toString('utf8');
     } catch (error) {
         if (error.status === 404) return null;
@@ -50,28 +45,15 @@ async function getFileContent(path) {
 
 async function saveFileContent(path, content, message, sha = null) {
     const encoded = Buffer.from(content, 'utf8').toString('base64');
-    const params = {
-        owner: OWNER,
-        repo: REPO,
-        path,
-        message,
-        content: encoded,
-    };
+    const params = { owner: OWNER, repo: REPO, path, message, content: encoded };
     if (sha) params.sha = sha;
     await octokit.repos.createOrUpdateFileContents(params);
 }
 
 async function deleteFile(path, sha, message) {
-    await octokit.repos.deleteFile({
-        owner: OWNER,
-        repo: REPO,
-        path,
-        message,
-        sha,
-    });
+    await octokit.repos.deleteFile({ owner: OWNER, repo: REPO, path, message, sha });
 }
 
-// ---------- 数据读写 ----------
 async function getIndex() {
     const content = await getFileContent(INDEX_PATH);
     if (!content) return { posts: [] };
@@ -82,11 +64,7 @@ async function saveIndex(index, message = '更新文章索引') {
     const existing = await getFileContent(INDEX_PATH);
     let sha = null;
     if (existing) {
-        const { data } = await octokit.repos.getContent({
-            owner: OWNER,
-            repo: REPO,
-            path: INDEX_PATH,
-        });
+        const { data } = await octokit.repos.getContent({ owner: OWNER, repo: REPO, path: INDEX_PATH });
         sha = data.sha;
     }
     await saveFileContent(INDEX_PATH, JSON.stringify(index, null, 2), message, sha);
@@ -102,11 +80,7 @@ async function saveUsers(usersData, message = '更新用户列表') {
     const existing = await getFileContent(USERS_PATH);
     let sha = null;
     if (existing) {
-        const { data } = await octokit.repos.getContent({
-            owner: OWNER,
-            repo: REPO,
-            path: USERS_PATH,
-        });
+        const { data } = await octokit.repos.getContent({ owner: OWNER, repo: REPO, path: USERS_PATH });
         sha = data.sha;
     }
     await saveFileContent(USERS_PATH, JSON.stringify(usersData, null, 2), message, sha);
@@ -123,11 +97,7 @@ async function savePostContent(postId, postData, message) {
     const existing = await getFileContent(path);
     let sha = null;
     if (existing) {
-        const { data } = await octokit.repos.getContent({
-            owner: OWNER,
-            repo: REPO,
-            path,
-        });
+        const { data } = await octokit.repos.getContent({ owner: OWNER, repo: REPO, path });
         sha = data.sha;
     }
     await saveFileContent(path, JSON.stringify(postData, null, 2), message, sha);
@@ -137,24 +107,16 @@ async function deletePostFile(postId) {
     const path = `${POSTS_DIR}/${postId}.json`;
     const content = await getFileContent(path);
     if (!content) return;
-    const { data } = await octokit.repos.getContent({
-        owner: OWNER,
-        repo: REPO,
-        path,
-    });
+    const { data } = await octokit.repos.getContent({ owner: OWNER, repo: REPO, path });
     await deleteFile(path, data.sha, `删除文章 ${postId}`);
 }
 
 // ---------- 初始化仓库 ----------
 async function initRepo() {
     const index = await getIndex();
-    if (!index.posts) {
-        await saveIndex({ posts: [] }, '初始化索引');
-    }
+    if (!index.posts) await saveIndex({ posts: [] }, '初始化索引');
     const usersData = await getUsers();
-    if (!usersData.users) {
-        usersData.users = [];
-    }
+    if (!usersData.users) usersData.users = [];
     const superExists = usersData.users.find(u => u.username === SUPER_ADMIN.username);
     if (!superExists) {
         usersData.users.push({
@@ -164,6 +126,7 @@ async function initRepo() {
         });
         await saveUsers(usersData, '添加超级管理员');
     }
+    console.log('✅ GitHub 仓库初始化完成');
 }
 initRepo().catch(console.error);
 
@@ -184,11 +147,6 @@ async function findUserByUsername(username) {
 }
 
 // ---------- 权限中间件 ----------
-function isAuthenticated(req, res, next) {
-    if (!req.session.username) return res.status(401).json({ error: '未登录' });
-    next();
-}
-
 async function isAdmin(req, res, next) {
     if (!req.session.username) return res.status(401).json({ error: '未登录' });
     const user = await findUserByUsername(req.session.username);
@@ -210,7 +168,6 @@ async function isSuperAdmin(req, res, next) {
 }
 
 // ---------- API 路由 ----------
-// 登录
 app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body;
     const user = await findUserByUsername(username);
@@ -218,30 +175,22 @@ app.post('/api/auth/login', async (req, res) => {
         return res.status(401).json({ error: '用户名或密码错误' });
     }
     req.session.username = username;
-    res.json({
-        success: true,
-        user: { username: user.username, role: user.role }
-    });
+    res.json({ success: true, user: { username: user.username, role: user.role } });
 });
 
-// 登出
 app.post('/api/auth/logout', (req, res) => {
     req.session.destroy();
     res.json({ success: true });
 });
 
-// 检查登录状态
 app.get('/api/auth/status', async (req, res) => {
     if (!req.session.username) return res.json({ isAdmin: false, user: null });
     const user = await findUserByUsername(req.session.username);
     if (!user) return res.json({ isAdmin: false, user: null });
-    res.json({
-        isAdmin: true,
-        user: { username: user.username, role: user.role }
-    });
+    res.json({ isAdmin: true, user: { username: user.username, role: user.role } });
 });
 
-// ---------- 用户管理（仅超级管理员） ----------
+// ---------- 用户管理 ----------
 app.get('/api/users', isSuperAdmin, async (req, res) => {
     const usersData = await getUsers();
     const safeUsers = usersData.users.map(u => ({ username: u.username, role: u.role }));
@@ -262,17 +211,52 @@ app.post('/api/users', isSuperAdmin, async (req, res) => {
 
 app.delete('/api/users/:username', isSuperAdmin, async (req, res) => {
     const target = req.params.username;
-    if (target === req.user.username) {
-        return res.status(400).json({ error: '不能删除自己' });
-    }
+    if (target === req.user.username) return res.status(400).json({ error: '不能删除自己' });
     const usersData = await getUsers();
     const idx = usersData.users.findIndex(u => u.username === target);
     if (idx === -1) return res.status(404).json({ error: '用户不存在' });
-    const user = usersData.users[idx];
-    if (user.role === 'super_admin') return res.status(403).json({ error: '不能删除超级管理员' });
+    if (usersData.users[idx].role === 'super_admin') {
+        return res.status(403).json({ error: '不能删除超级管理员' });
+    }
     usersData.users.splice(idx, 1);
     await saveUsers(usersData, `删除管理员 ${target}`);
     res.json({ success: true });
+});
+
+// ---------- 修改密码 ----------
+app.put('/api/users/:username/password', async (req, res) => {
+    if (!req.session.username) return res.status(401).json({ error: '未登录' });
+    const currentUser = await findUserByUsername(req.session.username);
+    if (!currentUser) return res.status(401).json({ error: '会话无效' });
+
+    const targetUsername = req.params.username;
+    const { oldPassword, newPassword } = req.body;
+
+    // 验证新密码不为空
+    if (!newPassword || newPassword.length < 3) {
+        return res.status(400).json({ error: '新密码长度至少3位' });
+    }
+
+    // 权限检查：超级管理员可以改任何人，普通管理员只能改自己
+    if (currentUser.role !== 'super_admin' && currentUser.username !== targetUsername) {
+        return res.status(403).json({ error: '只能修改自己的密码' });
+    }
+
+    const usersData = await getUsers();
+    const targetUser = usersData.users.find(u => u.username === targetUsername);
+    if (!targetUser) return res.status(404).json({ error: '用户不存在' });
+
+    // 如果是普通管理员改自己，需要验证旧密码
+    if (currentUser.role !== 'super_admin' && currentUser.username === targetUsername) {
+        if (targetUser.password !== oldPassword) {
+            return res.status(401).json({ error: '旧密码错误' });
+        }
+    }
+
+    // 更新密码
+    targetUser.password = newPassword;
+    await saveUsers(usersData, `修改密码 ${targetUsername}`);
+    res.json({ success: true, message: '密码修改成功' });
 });
 
 // ---------- 文章管理 ----------
@@ -298,16 +282,13 @@ app.post('/api/posts', isAdmin, async (req, res) => {
         return res.status(400).json({ error: '文章已存在' });
     }
     const newPost = {
-        id,
-        title,
-        content,
+        id, title, content,
         createdAt: Date.now(),
         views: 0,
         author: req.user.username,
     };
     index.posts.push({
-        id,
-        title,
+        id, title,
         author: req.user.username,
         createdAt: newPost.createdAt,
     });
@@ -330,7 +311,7 @@ app.delete('/api/posts/:id', isAdmin, async (req, res) => {
     res.json({ success: true });
 });
 
-// ---------- 启动服务 ----------
+// ---------- 启动 ----------
 app.listen(PORT, () => {
     console.log(`博客服务已启动: http://localhost:${PORT}`);
 });
