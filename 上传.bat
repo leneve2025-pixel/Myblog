@@ -1,6 +1,3 @@
-
-git add README.md
-git commit -m "博客启动！"
-git branch -M main
-git remote add origin https://github.com/leneve2025-pixel/Myblog.git
+git add .
+git commit -m "博客代码"
 git push -u origin main
