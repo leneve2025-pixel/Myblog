@@ -7,7 +7,7 @@ const { Octokit } = require('@octokit/rest');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ---------- 环境变量（Render 需设置） ----------
+// ---------- 环境变量 ----------
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const REPO_NAME = process.env.REPO_NAME;
 if (!GITHUB_TOKEN || !REPO_NAME) {
@@ -232,12 +232,10 @@ app.put('/api/users/:username/password', async (req, res) => {
     const targetUsername = req.params.username;
     const { oldPassword, newPassword } = req.body;
 
-    // 验证新密码不为空
     if (!newPassword || newPassword.length < 3) {
         return res.status(400).json({ error: '新密码长度至少3位' });
     }
 
-    // 权限检查：超级管理员可以改任何人，普通管理员只能改自己
     if (currentUser.role !== 'super_admin' && currentUser.username !== targetUsername) {
         return res.status(403).json({ error: '只能修改自己的密码' });
     }
@@ -246,14 +244,13 @@ app.put('/api/users/:username/password', async (req, res) => {
     const targetUser = usersData.users.find(u => u.username === targetUsername);
     if (!targetUser) return res.status(404).json({ error: '用户不存在' });
 
-    // 如果是普通管理员改自己，需要验证旧密码
+    // 非超级管理员修改自己需要验证旧密码
     if (currentUser.role !== 'super_admin' && currentUser.username === targetUsername) {
         if (targetUser.password !== oldPassword) {
             return res.status(401).json({ error: '旧密码错误' });
         }
     }
 
-    // 更新密码
     targetUser.password = newPassword;
     await saveUsers(usersData, `修改密码 ${targetUsername}`);
     res.json({ success: true, message: '密码修改成功' });
@@ -287,13 +284,15 @@ app.post('/api/posts', isAdmin, async (req, res) => {
         views: 0,
         author: req.user.username,
     };
+    // ======= 关键修复：先保存文章文件，再更新索引 =======
+    await savePostContent(id, newPost, `创建文章 ${title}`);
+    // 文件保存成功后才更新索引
     index.posts.push({
         id, title,
         author: req.user.username,
         createdAt: newPost.createdAt,
     });
     await saveIndex(index, `添加文章 ${title}`);
-    await savePostContent(id, newPost, `创建文章 ${title}`);
     res.json({ post: newPost });
 });
 

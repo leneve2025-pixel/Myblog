@@ -88,7 +88,6 @@
             </div>
             <div id="admin-panel" style="display:none;">
                 <div id="admin-content">
-                    <!-- 修改密码（所有管理员可见） -->
                     <div class="admin-section admin-only change-pwd-area">
                         <h4><i class="fas fa-key"></i> 修改密码</h4>
                         <div>
@@ -97,7 +96,6 @@
                             <button class="submit-btn" onclick="handleChangePassword()">修改</button>
                         </div>
                     </div>
-                    <!-- 发布文章 -->
                     <div class="admin-section admin-only">
                         <h4><i class="fas fa-plus-circle"></i> 发布新文章</h4>
                         <form class="add-form" onsubmit="handleAddPost(event)">
@@ -106,12 +104,10 @@
                             <button type="submit" class="submit-btn">发布</button>
                         </form>
                     </div>
-                    <!-- 我的文章列表 -->
                     <div class="admin-section admin-only">
                         <h4><i class="fas fa-list-ul"></i> 我的文章</h4>
                         <div id="admin-post-list"></div>
                     </div>
-                    <!-- 用户管理（仅超级管理员） -->
                     <div class="admin-section super-only" id="user-mgmt-section">
                         <h4><i class="fas fa-users-cog"></i> 管理员管理</h4>
                         <div style="margin-bottom: 10px;">
@@ -136,7 +132,6 @@
     let posts = [];
     let currentView = 'home';
 
-    // ========== 工具函数 ==========
     function showToast(msg, type='info') {
         const container = document.getElementById('toast-container');
         const el = document.createElement('div');
@@ -168,7 +163,6 @@
         return div.innerHTML;
     }
 
-    // ========== 视图 ==========
     async function loadPosts() {
         try {
             const data = await apiFetch('/posts');
@@ -246,7 +240,6 @@
         });
     });
 
-    // ========== 管理 ==========
     async function loadAdminPanel() {
         try {
             const data = await apiFetch('/auth/status');
@@ -303,7 +296,6 @@
         `).join('');
     }
 
-    // 用户管理
     async function loadUserList() {
         if (!currentUser || currentUser.role !== 'super_admin') return;
         try {
@@ -361,15 +353,12 @@
         }
     }
 
-    // 修改密码
     async function handleChangePassword() {
         if (!currentUser) { showToast('请先登录', 'error'); return; }
         const oldPwd = document.getElementById('old-pwd').value.trim();
         const newPwd = document.getElementById('new-pwd').value.trim();
         if (!newPwd) { showToast('新密码不能为空', 'error'); return; }
         if (newPwd.length < 3) { showToast('新密码长度至少3位', 'error'); return; }
-
-        // 如果是超级管理员改别人，不需要旧密码，但这里我们只做自己修改，所以需要旧密码
         try {
             await apiFetch(`/users/${currentUser.username}/password`, {
                 method: 'PUT',
@@ -378,19 +367,15 @@
             showToast('密码修改成功，请重新登录', 'success');
             document.getElementById('old-pwd').value = '';
             document.getElementById('new-pwd').value = '';
-            // 退出登录，强制重新认证
             await handleLogout();
         } catch(err) {
             showToast('修改失败: '+err.message, 'error');
         }
     }
 
-    // 超级管理员重置他人密码（前端调用的函数）
     async function handleResetPassword(username) {
         if (!confirm(`确认重置用户 ${username} 的密码为 "123456"？`)) return;
         try {
-            // 这里调用修改密码接口，但新密码固定为 123456，且旧密码传空（因为超级管理员无需旧密码）
-            // 但我们的 API 要求超级管理员修改别人时，不检查旧密码，所以我们可以传任意值
             await apiFetch(`/users/${username}/password`, {
                 method: 'PUT',
                 body: JSON.stringify({ oldPassword: '', newPassword: '123456' })
@@ -401,7 +386,6 @@
         }
     }
 
-    // ========== 登录/登出 ==========
     async function handleLogin() {
         const username = document.getElementById('login-username').value.trim();
         const password = document.getElementById('login-password').value.trim();
@@ -435,7 +419,6 @@
         }
     }
 
-    // ========== 文章操作 ==========
     async function handleAddPost(e) {
         e.preventDefault();
         if (!currentUser) { showToast('请先登录', 'error'); return; }
@@ -470,7 +453,6 @@
         }
     }
 
-    // 回车登录
     document.getElementById('login-password').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') handleLogin();
     });
@@ -480,7 +462,6 @@
 
     window.onload = function() { switchView('home'); };
 
-    // 暴露全局
     window.viewPost = viewPost;
     window.goHome = goHome;
     window.handleLogin = handleLogin;
