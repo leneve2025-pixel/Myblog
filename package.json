@@ -1,7 +1,7 @@
 {
   "name": "blog-github-storage",
   "version": "1.0.0",
-  "description": "个人博客，使用GitHub存储文章",
+  "description": "个人博客，GitHub存储，Render部署",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

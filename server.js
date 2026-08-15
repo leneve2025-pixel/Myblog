@@ -7,25 +7,41 @@ const { Octokit } = require('@octokit/rest');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ---------- 环境变量 ----------
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-const REPO_NAME = process.env.REPO_NAME;
-if (!GITHUB_TOKEN || !REPO_NAME) {
-    console.error('❌ 缺少 GITHUB_TOKEN 或 REPO_NAME 环境变量');
+// ============================================================
+//  ★★★ 用户配置区（修改这里即可） ★★★
+// ============================================================
+
+const CONFIG = {
+    // ---------- GitHub 数据仓库（存放文章和用户数据） ----------
+    // 格式：'owner/repo'
+    DATA_REPO: process.env.REPO_NAME || 'leneve2025-pixel/blog-posts',
+
+    // ---------- GitHub 访问令牌 ----------
+    // 在 Render 环境变量中设置 GITHUB_TOKEN，或直接填写（不推荐硬编码）
+    GITHUB_TOKEN: process.env.GITHUB_TOKEN || '',
+
+    // ---------- 超级管理员账号 ----------
+    SUPER_ADMIN: {
+        username: 'xiaohai',   // 管理员用户名
+        password: '114514'     // 管理员密码
+    }
+};
+
+// ============================================================
+//  以下代码无需修改（除非你了解其含义）
+// ============================================================
+
+const { DATA_REPO, GITHUB_TOKEN, SUPER_ADMIN } = CONFIG;
+if (!GITHUB_TOKEN || !DATA_REPO) {
+    console.error('❌ 缺少 GITHUB_TOKEN 或 DATA_REPO，请检查配置');
     process.exit(1);
 }
-const [OWNER, REPO] = REPO_NAME.split('/');
+const [OWNER, REPO] = DATA_REPO.split('/');
 const octokit = new Octokit({ auth: GITHUB_TOKEN });
 
 const INDEX_PATH = 'index.json';
 const POSTS_DIR = 'posts';
 const USERS_PATH = 'users.json';
-
-const SUPER_ADMIN = {
-    username: 'xiaohai',
-    password: '114514',
-    role: 'super_admin'
-};
 
 // ---------- 辅助函数 ----------
 function generateId(title, content) {
@@ -53,13 +69,14 @@ async function deleteFile(path, sha, message) {
     await octokit.repos.deleteFile({ owner: OWNER, repo: REPO, path, message, sha });
 }
 
-// ===== 修复 getIndex =====
 async function getIndex() {
     const content = await getFileContent(INDEX_PATH);
     if (!content) return { posts: [] };
     try {
-        return JSON.parse(content);
-    } catch (err) {
+        const parsed = JSON.parse(content);
+        if (!parsed.posts) parsed.posts = [];
+        return parsed;
+    } catch {
         console.warn('⚠️ index.json 格式错误，重置为空索引');
         return { posts: [] };
     }
@@ -78,7 +95,14 @@ async function saveIndex(index, message = '更新文章索引') {
 async function getUsers() {
     const content = await getFileContent(USERS_PATH);
     if (!content) return { users: [] };
-    return JSON.parse(content);
+    try {
+        const parsed = JSON.parse(content);
+        if (!parsed.users) parsed.users = [];
+        return parsed;
+    } catch {
+        console.warn('⚠️ users.json 格式错误，重置为空列表');
+        return { users: [] };
+    }
 }
 
 async function saveUsers(usersData, message = '更新用户列表') {
@@ -116,7 +140,7 @@ async function deletePostFile(postId) {
     await deleteFile(path, data.sha, `删除文章 ${postId}`);
 }
 
-// ===== 修复 initRepo =====
+// ---------- 初始化仓库 ----------
 async function initRepo() {
     try {
         let index = await getIndex();
@@ -132,7 +156,7 @@ async function initRepo() {
             usersData.users.push({
                 username: SUPER_ADMIN.username,
                 password: SUPER_ADMIN.password,
-                role: SUPER_ADMIN.role,
+                role: 'super_admin',
             });
             await saveUsers(usersData, '添加超级管理员');
         }
@@ -153,7 +177,7 @@ app.use(session({
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
 
-// ---------- 辅助函数 ----------
+// ---------- 用户辅助 ----------
 async function findUserByUsername(username) {
     const usersData = await getUsers();
     return usersData.users.find(u => u.username === username);
@@ -219,7 +243,7 @@ app.get('/api/auth/status', async (req, res) => {
     }
 });
 
-// 用户管理
+// ---------- 用户管理 ----------
 app.get('/api/users', isSuperAdmin, async (req, res) => {
     try {
         const usersData = await getUsers();
@@ -264,7 +288,7 @@ app.delete('/api/users/:username', isSuperAdmin, async (req, res) => {
     }
 });
 
-// 修改密码
+// ---------- 修改密码 ----------
 app.put('/api/users/:username/password', async (req, res) => {
     try {
         if (!req.session.username) return res.status(401).json({ error: '未登录' });
@@ -298,7 +322,7 @@ app.put('/api/users/:username/password', async (req, res) => {
     }
 });
 
-// 文章管理
+// ---------- 文章管理 ----------
 app.get('/api/posts', async (req, res) => {
     try {
         const index = await getIndex();
@@ -367,6 +391,7 @@ app.delete('/api/posts/:id', isAdmin, async (req, res) => {
     }
 });
 
+// ---------- 启动 ----------
 app.listen(PORT, () => {
     console.log(`博客服务已启动: http://localhost:${PORT}`);
 });
