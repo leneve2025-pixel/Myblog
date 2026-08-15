@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000;
 const CONFIG = {
     // ---------- GitHub 数据仓库（存放文章和用户数据） ----------
     // 格式：'owner/repo'
-    DATA_REPO: process.env.REPO_NAME || 'leneve2025-pixel/blog-posts',
+    DATA_REPO: process.env.REPO_NAME || 'leneve2025-pixel/Myblogdatal',
 
     // ---------- GitHub 访问令牌 ----------
     // 在 Render 环境变量中设置 GITHUB_TOKEN，或直接填写（不推荐硬编码）
