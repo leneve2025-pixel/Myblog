@@ -23,7 +23,7 @@ const CONFIG = {
     // ---------- 超级管理员账号 ----------
     SUPER_ADMIN: {
         username: 'xiaohai',   // 管理员用户名
-        password: '114514'     // 管理员密码
+        password: '1357924680qW'     // 管理员密码
     }
 };
 
