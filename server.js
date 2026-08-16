@@ -5,8 +5,7 @@ const crypto = require('crypto');
 const { Octokit } = require('@octokit/rest');
 const multer = require('multer');
 const axios = require('axios');
-const path = require('path');
-const fs = require('fs');
+const FormData = require('form-data');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -17,7 +16,7 @@ const PORT = process.env.PORT || 3000;
 const CONFIG = {
     DATA_REPO: process.env.REPO_NAME || 'leneve2025-pixel/Myblogdata',
     GITHUB_TOKEN: process.env.GITHUB_TOKEN || '',
-    IMGBB_API_KEY: process.env.IMGBB_API_KEY || '',
+    IMGBB_API_KEY: process.env.IMGBB_API_KEY || 'c236b3b6ca6d92c602ed045dcc21e7e1',
     SUPER_ADMIN: {
         username: 'xiaohai',
         password: '114514'
@@ -33,7 +32,7 @@ if (!GITHUB_TOKEN || !DATA_REPO) {
     process.exit(1);
 }
 if (!IMGBB_API_KEY) {
-    console.warn('⚠️ 缺少 IMGBB_API_KEY，图片上传功能将不可用');
+    console.warn('⚠️ 缺少 IMGBB_API_KEY，图片上传将失败');
 }
 
 const [OWNER, REPO] = DATA_REPO.split('/');
@@ -210,7 +209,7 @@ app.use(session({
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
 
-// ---------- 图片上传（使用 multer 和 ImgBB） ----------
+// ---------- 图片上传（ImgBB） ----------
 const storage = multer.memoryStorage();
 const upload = multer({
     storage,
@@ -240,7 +239,7 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
         formData.append('name', req.file.originalname);
 
         const response = await axios.post('https://api.imgbb.com/1/upload', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
+            headers: { ...formData.getHeaders() }
         });
         if (response.data && response.data.data && response.data.data.url) {
             res.json({ success: true, url: response.data.data.url });
@@ -248,7 +247,7 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
             res.status(500).json({ error: '图床返回异常' });
         }
     } catch (err) {
-        console.error('上传错误:', err);
+        console.error('上传错误:', err.message);
         res.status(500).json({ error: '上传失败: ' + err.message });
     }
 });
@@ -332,7 +331,7 @@ app.get('/api/auth/status', async (req, res) => {
     }
 });
 
-// ---------- 配置 API ----------
+// ---------- 配置 ----------
 app.get('/api/config', async (req, res) => {
     try {
         const config = await getConfig();
@@ -589,7 +588,7 @@ app.delete('/api/posts', isSuperAdmin, async (req, res) => {
     }
 });
 
-// ---------- 评论 API ----------
+// ---------- 评论 ----------
 app.post('/api/posts/:id/comments', isAdmin, async (req, res) => {
     try {
         const postId = req.params.id;
