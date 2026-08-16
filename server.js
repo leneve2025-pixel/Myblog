@@ -3,6 +3,10 @@ const session = require('express-session');
 const bodyParser = require('body-parser');
 const crypto = require('crypto');
 const { Octokit } = require('@octokit/rest');
+const multer = require('multer');
+const axios = require('axios');
+const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -13,6 +17,7 @@ const PORT = process.env.PORT || 3000;
 const CONFIG = {
     DATA_REPO: process.env.REPO_NAME || 'leneve2025-pixel/Myblogdata',
     GITHUB_TOKEN: process.env.GITHUB_TOKEN || '',
+    IMGBB_API_KEY: process.env.IMGBB_API_KEY || '',
     SUPER_ADMIN: {
         username: 'xiaohai',
         password: '114514'
@@ -22,11 +27,15 @@ const CONFIG = {
 // ============================================================
 //  核心逻辑
 // ============================================================
-const { DATA_REPO, GITHUB_TOKEN, SUPER_ADMIN } = CONFIG;
+const { DATA_REPO, GITHUB_TOKEN, IMGBB_API_KEY, SUPER_ADMIN } = CONFIG;
 if (!GITHUB_TOKEN || !DATA_REPO) {
     console.error('❌ 缺少 GITHUB_TOKEN 或 DATA_REPO');
     process.exit(1);
 }
+if (!IMGBB_API_KEY) {
+    console.warn('⚠️ 缺少 IMGBB_API_KEY，图片上传功能将不可用');
+}
+
 const [OWNER, REPO] = DATA_REPO.split('/');
 const octokit = new Octokit({ auth: GITHUB_TOKEN });
 
@@ -111,16 +120,16 @@ async function saveUsers(usersData, message = '更新用户列表') {
 async function getConfig() {
     const content = await getFileContent(CONFIG_PATH);
     if (!content) {
-        return { blogTitle: '我的博客', themeColor: '#6750A4', wallpaper: '' };
+        return { blogTitle: '我的博客', themeColor: '#4CAF50', wallpaper: '' };
     }
     try {
         const parsed = JSON.parse(content);
         if (!parsed.blogTitle) parsed.blogTitle = '我的博客';
-        if (!parsed.themeColor) parsed.themeColor = '#6750A4';
+        if (!parsed.themeColor) parsed.themeColor = '#4CAF50';
         if (!parsed.wallpaper) parsed.wallpaper = '';
         return parsed;
     } catch {
-        return { blogTitle: '我的博客', themeColor: '#6750A4', wallpaper: '' };
+        return { blogTitle: '我的博客', themeColor: '#4CAF50', wallpaper: '' };
     }
 }
 
@@ -139,7 +148,6 @@ async function getPostContent(postId) {
     const content = await getFileContent(`${POSTS_DIR}/${postId}.json`);
     if (!content) return null;
     const parsed = JSON.parse(content);
-    // 确保评论字段存在
     if (!parsed.comments) parsed.comments = [];
     return parsed;
 }
@@ -166,13 +174,11 @@ async function deletePostFile(postId) {
 // ---------- 初始化 ----------
 async function initRepo() {
     try {
-        // 索引
         let index = await getIndex();
         if (!index.posts) {
             index = { posts: [] };
             await saveIndex(index, '重建空索引');
         }
-        // 用户
         const usersData = await getUsers();
         if (!usersData.users) usersData.users = [];
         const superExists = usersData.users.find(u => u.username === SUPER_ADMIN.username);
@@ -185,7 +191,6 @@ async function initRepo() {
             });
             await saveUsers(usersData, '添加超级管理员');
         }
-        // 配置
         const config = await getConfig();
         await saveConfig(config, '初始化配置');
         console.log('✅ GitHub 仓库初始化完成');
@@ -202,8 +207,51 @@ app.use(session({
     secret: 'myblog-secret-key',
     resave: false,
     saveUninitialized: false,
-    cookie: { maxAge: 24 * 60 * 60 * 1000 } // 24小时
+    cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
+
+// ---------- 图片上传（使用 multer 和 ImgBB） ----------
+const storage = multer.memoryStorage();
+const upload = multer({
+    storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype.startsWith('image/')) {
+            cb(null, true);
+        } else {
+            cb(new Error('只允许图片格式'), false);
+        }
+    }
+});
+
+app.post('/api/upload', upload.single('image'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: '未上传文件' });
+        }
+        if (!IMGBB_API_KEY) {
+            return res.status(500).json({ error: '服务器未配置图床密钥' });
+        }
+        // 将图片转为 base64
+        const base64 = req.file.buffer.toString('base64');
+        const formData = new FormData();
+        formData.append('key', IMGBB_API_KEY);
+        formData.append('image', base64);
+        formData.append('name', req.file.originalname);
+
+        const response = await axios.post('https://api.imgbb.com/1/upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        if (response.data && response.data.data && response.data.data.url) {
+            res.json({ success: true, url: response.data.data.url });
+        } else {
+            res.status(500).json({ error: '图床返回异常' });
+        }
+    } catch (err) {
+        console.error('上传错误:', err);
+        res.status(500).json({ error: '上传失败: ' + err.message });
+    }
+});
 
 // ---------- 辅助 ----------
 async function findUserByUsername(username) {
@@ -484,7 +532,6 @@ app.post('/api/posts', isAdmin, async (req, res) => {
             cover: newPost.cover,
         });
         await saveIndex(index, `添加文章 ${title}`);
-        // 返回完整文章（含作者显示名）
         const usersData = await getUsers();
         const user = usersData.users.find(u => u.username === req.user.username);
         newPost.authorDisplay = user ? (user.displayName || user.username) : req.user.username;
@@ -553,7 +600,6 @@ app.post('/api/posts/:id/comments', isAdmin, async (req, res) => {
         const post = await getPostContent(postId);
         if (!post) return res.status(404).json({ error: '文章不存在' });
 
-        // 获取用户显示名
         const usersData = await getUsers();
         const user = usersData.users.find(u => u.username === req.user.username);
         const displayName = user ? (user.displayName || user.username) : req.user.username;
@@ -585,7 +631,6 @@ app.delete('/api/posts/:postId/comments/:commentId', isAdmin, async (req, res) =
         if (idx === -1) return res.status(404).json({ error: '评论不存在' });
 
         const comment = post.comments[idx];
-        // 只有作者本人或超级管理员可删除
         if (req.user.role !== 'super_admin' && comment.author !== req.user.username) {
             return res.status(403).json({ error: '无权删除此评论' });
         }

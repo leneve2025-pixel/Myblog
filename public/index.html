@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     <style>
         /* ===== Pixel UI (Material You 风格) ===== */
+        :root { --theme-color: #4CAF50; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Roboto', sans-serif;
@@ -21,11 +22,10 @@
             background-position: center;
             background-attachment: fixed;
         }
-        body.light { background: #f5f5f5; color: #1c1c1c; }
         body.dark { background: #1c1c1c; color: #e0e0e0; }
 
         .container {
-            max-width: 880px;
+            max-width: 900px;
             margin: 0 auto;
             background: rgba(255,255,255,0.9);
             backdrop-filter: blur(8px);
@@ -55,12 +55,11 @@
             align-items: center;
             gap: 8px;
         }
-        .logo i { color: #6750A4; font-size: 28px; }
-        body.dark .logo i { color: #D0BCFF; }
+        .logo i { color: var(--theme-color); font-size: 28px; }
 
         .nav-links a {
             color: #444;
-            margin-left: 20px;
+            margin-left: 16px;
             text-decoration: none;
             font-weight: 500;
             font-size: 15px;
@@ -72,13 +71,13 @@
         body.dark .nav-links a { color: #ccc; }
         .nav-links a:hover { background: rgba(0,0,0,0.05); }
         body.dark .nav-links a:hover { background: rgba(255,255,255,0.08); }
-        .nav-links .admin-btn {
-            background: #6750A4;
+        .nav-links .admin-btn, .nav-links .publish-btn {
+            background: var(--theme-color);
             color: #fff !important;
             padding: 6px 18px;
             border-radius: 24px;
         }
-        body.dark .nav-links .admin-btn { background: #D0BCFF; color: #1c1c1c !important; }
+        body.dark .nav-links .admin-btn, body.dark .nav-links .publish-btn { color: #1c1c1c !important; }
 
         .main-content { padding: 28px 32px; }
 
@@ -95,213 +94,84 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.04);
             cursor: pointer;
             transition: box-shadow 0.2s, transform 0.2s;
-            border-left: 6px solid #6750A4;
+            border-left: 6px solid var(--theme-color);
         }
-        body.dark .blog-card { background: #2a2a2a; border-left-color: #D0BCFF; }
+        body.dark .blog-card { background: #2a2a2a; border-left-color: var(--theme-color); }
         .blog-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.08); transform: translateY(-2px); }
         .blog-card h3 { font-size: 20px; font-weight: 500; margin-bottom: 4px; }
+        .blog-card .cover-img { width: 100%; max-height: 200px; object-fit: cover; border-radius: 12px; margin-bottom: 10px; }
         .meta { font-size: 13px; color: #888; display: flex; gap: 16px; flex-wrap: wrap; }
         .summary { margin-top: 10px; color: #555; font-weight: 300; line-height: 1.5; }
         body.dark .summary { color: #aaa; }
 
-        .detail-back {
-            color: #6750A4;
-            cursor: pointer;
-            font-weight: 500;
-            display: inline-block;
-            margin-bottom: 16px;
-        }
-        body.dark .detail-back { color: #D0BCFF; }
+        .detail-back { color: var(--theme-color); cursor: pointer; font-weight: 500; display: inline-block; margin-bottom: 16px; }
         .detail-title { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
         .detail-meta { font-size: 14px; color: #888; margin-bottom: 16px; }
-        .detail-content {
-            font-size: 16px;
-            line-height: 1.8;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            margin-bottom: 24px;
-        }
+        .detail-content { font-size: 16px; line-height: 1.8; white-space: pre-wrap; word-wrap: break-word; margin-bottom: 24px; }
+        .detail-content img { max-width: 100%; border-radius: 12px; margin: 10px 0; }
 
-        /* 评论区域 */
-        .comments-section {
-            margin-top: 32px;
-            border-top: 1px solid #ddd;
-            padding-top: 20px;
-        }
+        /* 评论 */
+        .comments-section { margin-top: 32px; border-top: 1px solid #ddd; padding-top: 20px; }
         body.dark .comments-section { border-top-color: #444; }
         .comments-section h4 { font-size: 18px; font-weight: 500; margin-bottom: 16px; }
-        .comment-item {
-            padding: 12px 0;
-            border-bottom: 1px solid #eee;
-        }
+        .comment-item { padding: 12px 0; border-bottom: 1px solid #eee; }
         body.dark .comment-item { border-bottom-color: #333; }
         .comment-author { font-weight: 500; font-size: 14px; }
         .comment-time { font-size: 12px; color: #999; margin-left: 12px; }
         .comment-content { margin-top: 4px; font-size: 15px; }
-        .comment-delete {
-            float: right;
-            color: #e17055;
-            cursor: pointer;
-            font-size: 13px;
-        }
-        .comment-input-area {
-            display: flex;
-            gap: 10px;
-            margin-top: 12px;
-            align-items: center;
-        }
-        .comment-input-area input {
-            flex: 1;
-            padding: 10px 14px;
-            border: 1px solid #ddd;
-            border-radius: 24px;
-            font-size: 14px;
-            background: #fff;
-            outline: none;
-        }
-        body.dark .comment-input-area input {
-            background: #2a2a2a;
-            border-color: #555;
-            color: #e0e0e0;
-        }
-        .comment-input-area button {
-            background: #6750A4;
-            color: #fff;
-            border: none;
-            padding: 8px 20px;
-            border-radius: 24px;
-            font-weight: 500;
-            cursor: pointer;
-        }
-        body.dark .comment-input-area button { background: #D0BCFF; color: #1c1c1c; }
+        .comment-delete { float: right; color: #e17055; cursor: pointer; font-size: 13px; }
+        .comment-input-area { display: flex; gap: 10px; margin-top: 12px; align-items: center; flex-wrap: wrap; }
+        .comment-input-area input { flex: 1; padding: 10px 14px; border: 1px solid #ddd; border-radius: 24px; font-size: 14px; background: #fff; outline: none; min-width: 150px; }
+        body.dark .comment-input-area input { background: #2a2a2a; border-color: #555; color: #e0e0e0; }
+        .comment-input-area button { background: var(--theme-color); color: #fff; border: none; padding: 8px 20px; border-radius: 24px; font-weight: 500; cursor: pointer; }
 
         /* 登录表单 */
-        .login-form {
-            max-width: 380px;
-            margin: 30px auto;
-            background: #fff;
-            padding: 28px 24px;
-            border-radius: 24px;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
-        }
+        .login-form { max-width: 380px; margin: 30px auto; background: #fff; padding: 28px 24px; border-radius: 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
         body.dark .login-form { background: #2a2a2a; }
-        .login-form input {
-            width: 100%;
-            padding: 12px 14px;
-            border: 1px solid #ddd;
-            border-radius: 24px;
-            margin-bottom: 14px;
-            font-size: 15px;
-            background: #f9f9f9;
-            outline: none;
-        }
+        .login-form input { width: 100%; padding: 12px 14px; border: 1px solid #ddd; border-radius: 24px; margin-bottom: 14px; font-size: 15px; background: #f9f9f9; outline: none; }
         body.dark .login-form input { background: #1c1c1c; border-color: #444; color: #e0e0e0; }
-        .login-btn {
-            width: 100%;
-            padding: 12px;
-            background: #6750A4;
-            color: #fff;
-            border: none;
-            border-radius: 24px;
-            font-weight: 500;
-            font-size: 16px;
-            cursor: pointer;
-        }
-        body.dark .login-btn { background: #D0BCFF; color: #1c1c1c; }
+        .login-btn { width: 100%; padding: 12px; background: var(--theme-color); color: #fff; border: none; border-radius: 24px; font-weight: 500; font-size: 16px; cursor: pointer; }
         .login-error { color: #e17055; text-align: center; display: none; margin-top: 8px; }
 
         /* 管理面板 */
-        .admin-section {
-            background: #fff;
-            border-radius: 20px;
-            padding: 20px 24px;
-            margin-bottom: 20px;
-        }
+        .admin-section { background: #fff; border-radius: 20px; padding: 20px 24px; margin-bottom: 20px; }
         body.dark .admin-section { background: #2a2a2a; }
         .admin-section h4 { font-size: 18px; font-weight: 500; margin-bottom: 12px; }
-        .admin-section input, .admin-section textarea {
-            width: 100%;
-            padding: 10px 14px;
-            border: 1px solid #ddd;
-            border-radius: 16px;
-            margin-bottom: 10px;
-            font-size: 14px;
-            background: #f9f9f9;
-            font-family: inherit;
-            outline: none;
-        }
-        body.dark .admin-section input, body.dark .admin-section textarea {
-            background: #1c1c1c;
-            border-color: #444;
-            color: #e0e0e0;
-        }
+        .admin-section input, .admin-section textarea { width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 16px; margin-bottom: 10px; font-size: 14px; background: #f9f9f9; font-family: inherit; outline: none; }
+        body.dark .admin-section input, body.dark .admin-section textarea { background: #1c1c1c; border-color: #444; color: #e0e0e0; }
         .admin-section textarea { min-height: 100px; resize: vertical; }
-        .submit-btn {
-            background: #6750A4;
-            color: #fff;
-            border: none;
-            padding: 8px 24px;
-            border-radius: 24px;
-            font-weight: 500;
-            cursor: pointer;
-        }
-        body.dark .submit-btn { background: #D0BCFF; color: #1c1c1c; }
+        .submit-btn { background: var(--theme-color); color: #fff; border: none; padding: 8px 24px; border-radius: 24px; font-weight: 500; cursor: pointer; }
 
-        .admin-blog-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px 0;
-            border-bottom: 1px solid #eee;
-        }
+        .admin-blog-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; align-items: center; flex-wrap: wrap; }
         body.dark .admin-blog-item { border-bottom-color: #333; }
-        .del-btn {
-            background: #e17055;
-            color: #fff;
-            border: none;
-            padding: 4px 14px;
-            border-radius: 16px;
-            cursor: pointer;
-        }
-        .danger-btn {
-            background: #e17055;
-            color: #fff;
-            border: none;
-            padding: 8px 20px;
-            border-radius: 24px;
-            font-weight: 500;
-            cursor: pointer;
-        }
+        .del-btn { background: #e17055; color: #fff; border: none; padding: 4px 14px; border-radius: 16px; cursor: pointer; }
+        .danger-btn { background: #e17055; color: #fff; border: none; padding: 8px 20px; border-radius: 24px; font-weight: 500; cursor: pointer; }
 
         .empty-tip { color: #999; text-align: center; padding: 30px 0; }
 
+        /* 发布页面 */
+        .publish-form .form-group { margin-bottom: 16px; }
+        .publish-form label { display: block; font-weight: 500; margin-bottom: 4px; }
+        .publish-form input, .publish-form textarea { width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 16px; font-size: 14px; background: #f9f9f9; font-family: inherit; outline: none; }
+        body.dark .publish-form input, body.dark .publish-form textarea { background: #1c1c1c; border-color: #444; color: #e0e0e0; }
+        .publish-form textarea { min-height: 200px; resize: vertical; }
+        .publish-form .file-upload-wrapper { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .publish-form .file-upload-wrapper input[type="file"] { flex: 1; }
+        .publish-form .preview-img { max-width: 100%; max-height: 200px; border-radius: 12px; margin-top: 8px; }
+        .publish-form .insert-image-btn { background: var(--theme-color); color: #fff; border: none; padding: 6px 16px; border-radius: 20px; cursor: pointer; font-weight: 500; }
+
         /* Toast */
-        .toast-container {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            z-index: 9999;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        .toast {
-            padding: 12px 20px;
-            border-radius: 24px;
-            background: #333;
-            color: #fff;
-            font-size: 14px;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-            animation: slideUp 0.3s ease;
-        }
+        .toast-container { position: fixed; bottom: 30px; right: 30px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+        .toast { padding: 12px 20px; border-radius: 24px; background: #333; color: #fff; font-size: 14px; box-shadow: 0 4px 16px rgba(0,0,0,0.2); animation: slideUp 0.3s ease; }
         .toast.success { background: #00b894; }
         .toast.error { background: #e17055; }
         .toast.info { background: #0984e3; }
         @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-        .post-author { font-weight: 500; color: #6750A4; }
-        body.dark .post-author { color: #D0BCFF; }
+        .post-author { font-weight: 500; color: var(--theme-color); }
 
-        /* 响应式 */
+        .color-picker-wrapper { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
         @media (max-width: 640px) {
             .main-content { padding: 16px; }
             header { flex-direction: column; align-items: stretch; gap: 10px; }
@@ -315,6 +185,7 @@
         <div class="logo"><i class="fas fa-feather-alt"></i> <span id="site-title">MyBlog</span></div>
         <div class="nav-links">
             <a data-view="home"><i class="fas fa-home"></i> 首页</a>
+            <a data-view="publish" class="publish-btn"><i class="fas fa-plus-circle"></i> 发布</a>
             <a data-view="admin" class="admin-btn"><i class="fas fa-user-cog"></i> 管理</a>
         </div>
     </header>
@@ -330,6 +201,34 @@
             <div class="detail-back" onclick="goHome()"><i class="fas fa-arrow-left"></i> 返回</div>
             <div id="detail-content"></div>
             <div id="comments-area" style="margin-top:24px;"></div>
+        </div>
+        <!-- 发布页面 -->
+        <div id="view-publish" class="view">
+            <h2 style="font-weight:300; font-size:26px;"><i class="fas fa-feather-alt"></i> 发布新文章</h2>
+            <form class="publish-form" id="publish-form">
+                <div class="form-group">
+                    <label for="pub-title">标题</label>
+                    <input type="text" id="pub-title" placeholder="输入标题" required />
+                </div>
+                <div class="form-group">
+                    <label>封面图片</label>
+                    <div class="file-upload-wrapper">
+                        <input type="file" id="cover-file" accept="image/*" />
+                        <span style="color:#888; font-size:13px;">或输入网络图片URL</span>
+                        <input type="text" id="cover-url" placeholder="https://example.com/cover.jpg" style="flex:1; min-width:150px;" />
+                    </div>
+                    <img id="cover-preview" class="preview-img" style="display:none;" />
+                </div>
+                <div class="form-group">
+                    <label>正文</label>
+                    <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+                        <button type="button" class="insert-image-btn" onclick="insertImage()"><i class="fas fa-image"></i> 插入图片</button>
+                        <input type="file" id="content-image-input" accept="image/*" style="display:none;" onchange="uploadContentImage(event)" />
+                    </div>
+                    <textarea id="pub-content" placeholder="正文内容（支持 Markdown 图片语法：![alt](url)）" required></textarea>
+                </div>
+                <button type="submit" class="submit-btn" style="padding:10px 32px;">发布文章</button>
+            </form>
         </div>
         <!-- 管理 -->
         <div id="view-admin" class="view">
@@ -354,6 +253,15 @@
                             <button class="submit-btn" onclick="handleUpdateTitle()">保存</button>
                         </div>
                     </div>
+                    <!-- 自定义强调色 -->
+                    <div class="admin-section super-only config-area">
+                        <h4><i class="fas fa-palette"></i> 自定义强调色</h4>
+                        <div class="color-picker-wrapper">
+                            <input type="color" id="theme-color-picker" value="#4CAF50" />
+                            <span style="color:#888; font-size:13px;">选择颜色，保存后立即生效</span>
+                            <button class="submit-btn" onclick="handleUpdateThemeColor()">保存颜色</button>
+                        </div>
+                    </div>
                     <!-- 修改显示名 -->
                     <div class="admin-section admin-only">
                         <h4><i class="fas fa-user-tag"></i> 修改我的显示名</h4>
@@ -370,16 +278,6 @@
                             <input type="password" id="new-pwd" placeholder="新密码" style="flex:1; min-width:120px;" />
                             <button class="submit-btn" onclick="handleChangePassword()">修改</button>
                         </div>
-                    </div>
-                    <!-- 发布文章 -->
-                    <div class="admin-section admin-only">
-                        <h4><i class="fas fa-plus-circle"></i> 发布新文章</h4>
-                        <form class="add-form" onsubmit="handleAddPost(event)">
-                            <input type="text" id="add-title" placeholder="标题" required />
-                            <input type="text" id="add-cover" placeholder="封面图URL（可选）" />
-                            <textarea id="add-content" placeholder="正文" required></textarea>
-                            <button type="submit" class="submit-btn">发布</button>
-                        </form>
                     </div>
                     <!-- 文章列表 -->
                     <div class="admin-section admin-only">
@@ -412,13 +310,14 @@
 
 <script>
     // ============================================================
-    //  前端逻辑（支持评论、实时刷新、显示名等）
+    //  前端逻辑（含发布、图片上传、显示名、强调色等）
     // ============================================================
     const API_BASE = '/api';
     let currentUser = null;
     let posts = [];
     let currentView = 'home';
     let blogTitle = '我的博客';
+    let themeColor = '#4CAF50';
 
     // ---------- 工具 ----------
     function showToast(msg, type='info') {
@@ -452,29 +351,41 @@
         return div.innerHTML;
     }
 
+    // ---------- 应用主题色 ----------
+    function applyThemeColor(color) {
+        if (color) {
+            document.documentElement.style.setProperty('--theme-color', color);
+            // 更新按钮背景色
+            document.querySelectorAll('.admin-btn, .publish-btn, .login-btn, .submit-btn, .insert-image-btn, .comment-input-area button').forEach(el => {
+                if (!el.classList.contains('danger-btn') && !el.classList.contains('del-btn')) {
+                    el.style.backgroundColor = color;
+                }
+            });
+        }
+    }
+
     // ---------- 加载配置 ----------
-    async function loadBlogTitle() {
+    async function loadBlogConfig() {
         try {
             const data = await apiFetch('/config');
-            if (data && data.blogTitle) {
-                blogTitle = data.blogTitle;
-                document.title = blogTitle;
-                document.getElementById('site-title').textContent = blogTitle;
-                document.getElementById('home-title').textContent = blogTitle;
-            }
-            // 应用壁纸和主题色
-            if (data && data.wallpaper) {
-                document.body.style.backgroundImage = `url(${data.wallpaper})`;
-            }
-            if (data && data.themeColor) {
-                document.querySelector(':root')?.style.setProperty('--theme-color', data.themeColor);
-                // 修改一些按钮颜色（动态）
-                document.querySelectorAll('.admin-btn, .login-btn, .submit-btn, .comment-input-area button').forEach(el => {
-                    el.style.backgroundColor = data.themeColor;
-                });
+            if (data) {
+                if (data.blogTitle) {
+                    blogTitle = data.blogTitle;
+                    document.title = blogTitle;
+                    document.getElementById('site-title').textContent = blogTitle;
+                    document.getElementById('home-title').textContent = blogTitle;
+                }
+                if (data.themeColor) {
+                    themeColor = data.themeColor;
+                    applyThemeColor(themeColor);
+                    document.getElementById('theme-color-picker').value = themeColor;
+                }
+                if (data.wallpaper) {
+                    document.body.style.backgroundImage = `url(${data.wallpaper})`;
+                }
             }
         } catch (err) {
-            console.warn('无法加载标题');
+            console.warn('无法加载配置');
         }
     }
 
@@ -502,6 +413,7 @@
         const sorted = [...posts].sort((a,b) => b.createdAt - a.createdAt);
         list.innerHTML = sorted.map(p => `
             <div class="blog-card" onclick="viewPost('${p.id}')">
+                ${p.cover ? `<img src="${escapeHtml(p.cover)}" class="cover-img" alt="封面" />` : ''}
                 <h3>${escapeHtml(p.title)} <span class="post-author">by ${escapeHtml(p.authorDisplay || p.author || '未知')}</span></h3>
                 <div class="meta"><span><i class="far fa-calendar-alt"></i> ${formatDate(p.createdAt)}</span> <span><i class="far fa-eye"></i> ${p.views||0}</span></div>
                 <div class="summary">${escapeHtml(p.content ? p.content.slice(0,120) : '')}${p.content && p.content.length>120?'...':''}</div>
@@ -509,29 +421,26 @@
         `).join('');
     }
 
-    // ---------- 查看文章（含评论） ----------
+    // ---------- 查看文章 ----------
     async function viewPost(id) {
         try {
             const data = await apiFetch(`/posts/${id}`);
             const post = data.post;
             if (!post) throw new Error('文章不存在');
             switchView('detail');
-            // 显示文章内容
             document.getElementById('detail-content').innerHTML = `
                 <h1 class="detail-title">${escapeHtml(post.title)}</h1>
                 <div class="detail-meta"><i class="far fa-calendar-alt"></i> ${formatDate(post.createdAt)} &nbsp;|&nbsp; <i class="far fa-eye"></i> ${post.views||0} &nbsp;|&nbsp; 作者: ${escapeHtml(post.authorDisplay || post.author || '未知')}</div>
                 <div class="detail-content">${escapeHtml(post.content)}</div>
             `;
-            // 显示评论区域
             renderComments(post);
-            // 存储当前文章ID以便评论操作
             window._currentPostId = id;
         } catch(err) {
             showToast('加载文章失败: '+err.message, 'error');
         }
     }
 
-    // ---------- 渲染评论 ----------
+    // ---------- 评论 ----------
     function renderComments(post) {
         const container = document.getElementById('comments-area');
         let html = `<div class="comments-section"><h4>💬 评论 (${post.comments ? post.comments.length : 0})</h4>`;
@@ -550,7 +459,6 @@
         } else {
             html += `<p style="color:#999; font-size:14px;">暂无评论，来说点什么吧</p>`;
         }
-        // 如果已登录，显示评论输入框
         if (currentUser) {
             html += `
                 <div class="comment-input-area">
@@ -565,7 +473,6 @@
         container.innerHTML = html;
     }
 
-    // ---------- 提交评论 ----------
     async function submitComment() {
         if (!currentUser) { showToast('请先登录', 'error'); return; }
         const input = document.getElementById('comment-input');
@@ -574,21 +481,19 @@
         if (!content) { showToast('评论不能为空', 'error'); return; }
         const postId = window._currentPostId;
         try {
-            const data = await apiFetch(`/posts/${postId}/comments`, {
+            await apiFetch(`/posts/${postId}/comments`, {
                 method: 'POST',
                 body: JSON.stringify({ content })
             });
             showToast('评论发表成功', 'success');
-            // 重新加载文章详情以刷新评论
             viewPost(postId);
         } catch(err) {
             showToast('评论失败: '+err.message, 'error');
         }
     }
 
-    // ---------- 删除评论 ----------
     async function deleteComment(commentId) {
-        if (!confirm('确定要删除这条评论吗？')) return;
+        if (!confirm('确定删除这条评论？')) return;
         const postId = window._currentPostId;
         try {
             await apiFetch(`/posts/${postId}/comments/${commentId}`, { method: 'DELETE' });
@@ -610,6 +515,12 @@
             loadPosts();
         } else if (view === 'detail') {
             document.getElementById('view-detail').classList.add('active');
+        } else if (view === 'publish') {
+            document.getElementById('view-publish').classList.add('active');
+            if (!currentUser) {
+                showToast('请先登录再发布', 'info');
+                switchView('admin');
+            }
         } else if (view === 'admin') {
             document.getElementById('view-admin').classList.add('active');
             loadAdminPanel();
@@ -624,6 +535,9 @@
             e.preventDefault();
             const view = a.dataset.view;
             if (view === 'admin' && !currentUser) {
+                switchView('admin');
+            } else if (view === 'publish' && !currentUser) {
+                showToast('请先登录', 'info');
                 switchView('admin');
             } else {
                 switchView(view);
@@ -644,17 +558,18 @@
                 document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
                 if (currentUser.role === 'super_admin') {
                     document.querySelectorAll('.super-only').forEach(el => el.style.display = 'block');
-                    // 加载配置
                     try {
                         const cfg = await apiFetch('/config');
                         if (cfg.blogTitle) {
                             document.getElementById('blog-title-input').value = cfg.blogTitle;
                         }
+                        if (cfg.themeColor) {
+                            document.getElementById('theme-color-picker').value = cfg.themeColor;
+                        }
                     } catch (e) {}
                 } else {
                     document.querySelectorAll('.super-only').forEach(el => el.style.display = 'none');
                 }
-                // 加载显示名
                 document.getElementById('display-name-input').value = currentUser.displayName || currentUser.username;
                 await loadAdminPosts();
                 if (currentUser.role === 'super_admin') loadUserList();
@@ -710,7 +625,7 @@
                 return;
             }
             container.innerHTML = users.map(u => `
-                <div class="user-item" style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee;">
+                <div class="user-item" style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee; align-items:center;">
                     <span>${escapeHtml(u.username)} (${escapeHtml(u.displayName || u.username)}) ${u.role === 'super_admin' ? '⭐' : ''}</span>
                     <div>
                         ${u.role !== 'super_admin' ? `<button class="del-btn" onclick="handleDeleteUser('${u.username}')">删除</button>` : ''}
@@ -768,9 +683,7 @@
             });
             showToast('显示名已更新', 'success');
             currentUser.displayName = newName;
-            // 刷新当前用户显示
             document.getElementById('admin-status').textContent = `✅ 已登录 (${newName})`;
-            // 如果当前在首页，刷新文章列表以更新作者名
             if (currentView === 'home') loadPosts();
         } catch(err) {
             showToast('更新失败: '+err.message, 'error');
@@ -834,6 +747,27 @@
         }
     }
 
+    // ---------- 自定义强调色 ----------
+    async function handleUpdateThemeColor() {
+        if (!currentUser || currentUser.role !== 'super_admin') {
+            showToast('权限不足', 'error');
+            return;
+        }
+        const color = document.getElementById('theme-color-picker').value;
+        if (!color) { showToast('请选择颜色', 'error'); return; }
+        try {
+            await apiFetch('/config', {
+                method: 'PUT',
+                body: JSON.stringify({ themeColor: color })
+            });
+            showToast('主题颜色已更新', 'success');
+            themeColor = color;
+            applyThemeColor(color);
+        } catch(err) {
+            showToast('更新失败: '+err.message, 'error');
+        }
+    }
+
     // ---------- 清空所有文章 ----------
     async function handleClearAllPosts() {
         if (!currentUser || currentUser.role !== 'super_admin') {
@@ -865,17 +799,7 @@
                 currentUser = data.user;
                 showToast('登录成功', 'success');
                 loadAdminPanel();
-                // 加载配置
-                try {
-                    const cfg = await apiFetch('/config');
-                    if (cfg.blogTitle) {
-                        blogTitle = cfg.blogTitle;
-                        document.title = blogTitle;
-                        document.getElementById('site-title').textContent = blogTitle;
-                        document.getElementById('home-title').textContent = blogTitle;
-                    }
-                } catch (e) {}
-                // 如果当前在详情页，刷新评论
+                await loadBlogConfig();
                 if (currentView === 'detail' && window._currentPostId) {
                     viewPost(window._currentPostId);
                 }
@@ -896,38 +820,116 @@
             loadAdminPanel();
             if (currentView === 'admin') switchView('admin');
             if (currentView === 'detail' && window._currentPostId) {
-                viewPost(window._currentPostId); // 刷新评论区域显示“登录后评论”
+                viewPost(window._currentPostId);
             }
         } catch(err) {
             showToast('退出失败', 'error');
         }
     }
 
-    // ---------- 发布/删除文章 ----------
-    async function handleAddPost(e) {
+    // ---------- 发布文章 ----------
+    document.getElementById('publish-form').addEventListener('submit', async function(e) {
         e.preventDefault();
         if (!currentUser) { showToast('请先登录', 'error'); return; }
-        const title = document.getElementById('add-title').value.trim();
-        const content = document.getElementById('add-content').value.trim();
-        const cover = document.getElementById('add-cover').value.trim();
+        const title = document.getElementById('pub-title').value.trim();
+        const content = document.getElementById('pub-content').value.trim();
+        const coverFile = document.getElementById('cover-file').files[0];
+        let coverUrl = document.getElementById('cover-url').value.trim();
+
         if (!title || !content) { showToast('标题和内容不能为空', 'error'); return; }
+
+        // 如果上传了封面文件，先上传到图床
+        if (coverFile) {
+            try {
+                const formData = new FormData();
+                formData.append('image', coverFile);
+                const res = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.success) {
+                    coverUrl = data.url;
+                } else {
+                    showToast('封面上传失败，请使用URL', 'error');
+                    return;
+                }
+            } catch(err) {
+                showToast('封面上传失败: '+err.message, 'error');
+                return;
+            }
+        }
+
         try {
             const data = await apiFetch('/posts', {
                 method: 'POST',
-                body: JSON.stringify({ title, content, cover })
+                body: JSON.stringify({ title, content, cover: coverUrl })
             });
             showToast('发布成功', 'success');
-            document.getElementById('add-title').value = '';
-            document.getElementById('add-content').value = '';
-            document.getElementById('add-cover').value = '';
-            await loadAdminPosts();
-            // 如果首页可见，立即刷新首页
-            if (currentView === 'home') loadPosts();
+            // 清空表单
+            document.getElementById('pub-title').value = '';
+            document.getElementById('pub-content').value = '';
+            document.getElementById('cover-url').value = '';
+            document.getElementById('cover-file').value = '';
+            document.getElementById('cover-preview').style.display = 'none';
+            // 回到首页
+            switchView('home');
         } catch(err) {
             showToast('发布失败: '+err.message, 'error');
         }
+    });
+
+    // ---------- 图片插入 ----------
+    function insertImage() {
+        document.getElementById('content-image-input').click();
     }
 
+    async function uploadContentImage(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        try {
+            const formData = new FormData();
+            formData.append('image', file);
+            const res = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            if (data.success) {
+                const url = data.url;
+                const textarea = document.getElementById('pub-content');
+                const cursorPos = textarea.selectionStart;
+                const text = textarea.value;
+                const before = text.substring(0, cursorPos);
+                const after = text.substring(cursorPos);
+                const markdown = `\n![图片](${url})\n`;
+                textarea.value = before + markdown + after;
+                textarea.selectionStart = textarea.selectionEnd = cursorPos + markdown.length;
+                showToast('图片插入成功', 'success');
+            } else {
+                showToast('图片上传失败', 'error');
+            }
+        } catch(err) {
+            showToast('上传失败: '+err.message, 'error');
+        }
+        event.target.value = '';
+    }
+
+    // ---------- 封面预览 ----------
+    document.getElementById('cover-file').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = document.getElementById('cover-preview');
+                img.src = event.target.result;
+                img.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    // ---------- 删除文章 ----------
     async function handleDelete(id) {
         if (!confirm('确认删除该文章？')) return;
         try {
@@ -941,7 +943,7 @@
         }
     }
 
-    // 回车登录
+    // ---------- 回车登录 ----------
     document.getElementById('login-password').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') handleLogin();
     });
@@ -951,21 +953,13 @@
 
     // ========== 初始化 ==========
     window.onload = async function() {
-        await loadBlogTitle();
+        await loadBlogConfig();
         switchView('home');
-        // 检查登录状态
         try {
             const status = await apiFetch('/auth/status');
             if (status.isAdmin && status.user) {
                 currentUser = status.user;
-                // 加载配置
-                const cfg = await apiFetch('/config');
-                if (cfg.blogTitle) {
-                    blogTitle = cfg.blogTitle;
-                    document.title = blogTitle;
-                    document.getElementById('site-title').textContent = blogTitle;
-                    document.getElementById('home-title').textContent = blogTitle;
-                }
+                await loadBlogConfig();
             }
         } catch (e) {}
     };
@@ -975,17 +969,19 @@
     window.goHome = goHome;
     window.handleLogin = handleLogin;
     window.handleLogout = handleLogout;
-    window.handleAddPost = handleAddPost;
     window.handleDelete = handleDelete;
     window.handleCreateUser = handleCreateUser;
     window.handleDeleteUser = handleDeleteUser;
     window.handleChangePassword = handleChangePassword;
     window.handleResetPassword = handleResetPassword;
     window.handleUpdateTitle = handleUpdateTitle;
+    window.handleUpdateThemeColor = handleUpdateThemeColor;
     window.handleClearAllPosts = handleClearAllPosts;
     window.handleUpdateDisplayName = handleUpdateDisplayName;
     window.submitComment = submitComment;
     window.deleteComment = deleteComment;
+    window.insertImage = insertImage;
+    window.uploadContentImage = uploadContentImage;
     window.switchView = switchView;
 </script>
 </body>
