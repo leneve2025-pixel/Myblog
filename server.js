@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3000;
 
 const CONFIG = {
     // ---------- GitHub 数据仓库（存放文章和用户数据） ----------
-    DATA_REPO: process.env.REPO_NAME || 'leneve2025-pixel/Myblogdatal',
+    DATA_REPO: process.env.REPO_NAME || 'leneve2025-pixel/Myblogdata',
 
     // ---------- GitHub 访问令牌 ----------
     GITHUB_TOKEN: process.env.GITHUB_TOKEN || '',
