@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>小海不想写作业的博客</title>
+    <title id="page-title">我的博客</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
@@ -49,13 +49,18 @@
         .super-only { display:none; }
         .change-pwd-area { margin-top:10px; }
         .change-pwd-area input { padding:6px 10px; border:2px solid #dfe6e9; border-radius:6px; margin-right:6px; width:150px; }
+        /* 新样式 */
+        .config-area { margin-top:10px; }
+        .config-area input { padding:6px 10px; border:2px solid #dfe6e9; border-radius:6px; margin-right:6px; width:250px; }
+        .danger-btn { background:#e17055; color:#fff; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:600; }
+        .danger-btn:hover { background:#d63031; }
         @media (max-width:640px) { header { flex-direction:column; align-items:stretch; } .main-content { padding:24px 18px; } }
     </style>
 </head>
 <body>
 <div class="container">
     <header>
-        <div class="logo"><i class="fas fa-feather-alt"></i> MyBlog</div>
+        <div class="logo"><i class="fas fa-feather-alt"></i> <span id="site-title">MyBlog</span></div>
         <div class="nav-links">
             <a data-view="home"><i class="fas fa-home"></i> 首页</a>
             <a data-view="admin" class="admin-btn"><i class="fas fa-user-cog"></i> 管理</a>
@@ -64,7 +69,7 @@
     <div class="main-content">
         <!-- 首页 -->
         <div id="view-home" class="view active">
-            <h1>所有文章</h1>
+            <h1 id="home-title">所有文章</h1>
             <p id="post-count">共 0 篇</p>
             <div id="blog-list"><div class="empty-tip">加载中...</div></div>
         </div>
@@ -88,6 +93,15 @@
             </div>
             <div id="admin-panel" style="display:none;">
                 <div id="admin-content">
+                    <!-- 修改博客标题（超级管理员） -->
+                    <div class="admin-section super-only config-area">
+                        <h4><i class="fas fa-edit"></i> 修改博客标题</h4>
+                        <div>
+                            <input type="text" id="blog-title-input" placeholder="输入新标题" />
+                            <button class="submit-btn" onclick="handleUpdateTitle()">保存标题</button>
+                        </div>
+                    </div>
+                    <!-- 修改密码 -->
                     <div class="admin-section admin-only change-pwd-area">
                         <h4><i class="fas fa-key"></i> 修改密码</h4>
                         <div>
@@ -96,6 +110,7 @@
                             <button class="submit-btn" onclick="handleChangePassword()">修改</button>
                         </div>
                     </div>
+                    <!-- 发布文章 -->
                     <div class="admin-section admin-only">
                         <h4><i class="fas fa-plus-circle"></i> 发布新文章</h4>
                         <form class="add-form" onsubmit="handleAddPost(event)">
@@ -104,10 +119,18 @@
                             <button type="submit" class="submit-btn">发布</button>
                         </form>
                     </div>
+                    <!-- 我的文章列表 -->
                     <div class="admin-section admin-only">
                         <h4><i class="fas fa-list-ul"></i> 我的文章</h4>
                         <div id="admin-post-list"></div>
                     </div>
+                    <!-- 清空所有文章（超级管理员） -->
+                    <div class="admin-section super-only">
+                        <h4><i class="fas fa-trash-alt"></i> 危险操作</h4>
+                        <button class="danger-btn" onclick="handleClearAllPosts()">清空所有文章</button>
+                        <p style="color:#e17055; font-size:13px; margin-top:8px;">此操作将删除所有文章，不可恢复！</p>
+                    </div>
+                    <!-- 用户管理（超级管理员） -->
                     <div class="admin-section super-only" id="user-mgmt-section">
                         <h4><i class="fas fa-users-cog"></i> 管理员管理</h4>
                         <div style="margin-bottom: 10px;">
@@ -131,7 +154,9 @@
     let currentUser = null;
     let posts = [];
     let currentView = 'home';
+    let blogTitle = '我的博客';
 
+    // ========== 工具函数 ==========
     function showToast(msg, type='info') {
         const container = document.getElementById('toast-container');
         const el = document.createElement('div');
@@ -163,6 +188,22 @@
         return div.innerHTML;
     }
 
+    // ========== 加载博客标题 ==========
+    async function loadBlogTitle() {
+        try {
+            const data = await apiFetch('/config');
+            if (data && data.blogTitle) {
+                blogTitle = data.blogTitle;
+                document.title = blogTitle;
+                document.getElementById('site-title').textContent = blogTitle;
+                document.getElementById('home-title').textContent = blogTitle;
+            }
+        } catch (err) {
+            console.warn('无法加载标题，使用默认值');
+        }
+    }
+
+    // ========== 文章列表 ==========
     async function loadPosts() {
         try {
             const data = await apiFetch('/posts');
@@ -211,6 +252,7 @@
 
     function goHome() { switchView('home'); }
 
+    // ========== 视图切换 ==========
     function switchView(view) {
         currentView = view;
         document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -240,6 +282,7 @@
         });
     });
 
+    // ========== 管理后台 ==========
     async function loadAdminPanel() {
         try {
             const data = await apiFetch('/auth/status');
@@ -248,9 +291,17 @@
                 document.getElementById('admin-login-box').style.display = 'none';
                 document.getElementById('admin-panel').style.display = 'block';
                 document.getElementById('admin-status').textContent = `✅ 已登录 (${currentUser.username})`;
+                // 显示权限区域
                 document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
                 if (currentUser.role === 'super_admin') {
                     document.querySelectorAll('.super-only').forEach(el => el.style.display = 'block');
+                    // 加载配置到输入框
+                    try {
+                        const cfg = await apiFetch('/config');
+                        if (cfg.blogTitle) {
+                            document.getElementById('blog-title-input').value = cfg.blogTitle;
+                        }
+                    } catch (e) {}
                 } else {
                     document.querySelectorAll('.super-only').forEach(el => el.style.display = 'none');
                 }
@@ -296,6 +347,7 @@
         `).join('');
     }
 
+    // ========== 用户管理（超级管理员） ==========
     async function loadUserList() {
         if (!currentUser || currentUser.role !== 'super_admin') return;
         try {
@@ -353,6 +405,7 @@
         }
     }
 
+    // ========== 修改密码 ==========
     async function handleChangePassword() {
         if (!currentUser) { showToast('请先登录', 'error'); return; }
         const oldPwd = document.getElementById('old-pwd').value.trim();
@@ -386,6 +439,57 @@
         }
     }
 
+    // ========== 修改博客标题 ==========
+    async function handleUpdateTitle() {
+        if (!currentUser || currentUser.role !== 'super_admin') {
+            showToast('权限不足', 'error');
+            return;
+        }
+        const newTitle = document.getElementById('blog-title-input').value.trim();
+        if (!newTitle) {
+            showToast('标题不能为空', 'error');
+            return;
+        }
+        try {
+            await apiFetch('/config', {
+                method: 'PUT',
+                body: JSON.stringify({ blogTitle: newTitle })
+            });
+            showToast('标题修改成功', 'success');
+            // 更新界面
+            blogTitle = newTitle;
+            document.title = newTitle;
+            document.getElementById('site-title').textContent = newTitle;
+            document.getElementById('home-title').textContent = newTitle;
+            // 更新首页显示（如果当前在首页）
+            if (currentView === 'home') {
+                // 标题已更新，无需重新加载列表
+            }
+        } catch(err) {
+            showToast('修改失败: '+err.message, 'error');
+        }
+    }
+
+    // ========== 清空所有文章 ==========
+    async function handleClearAllPosts() {
+        if (!currentUser || currentUser.role !== 'super_admin') {
+            showToast('权限不足', 'error');
+            return;
+        }
+        if (!confirm('⚠️ 确定要删除所有文章吗？此操作不可恢复！')) return;
+        if (!confirm('再次确认：清空所有文章？')) return;
+        try {
+            await apiFetch('/posts', { method: 'DELETE' });
+            showToast('所有文章已清空', 'success');
+            // 刷新管理列表和首页列表
+            await loadAdminPosts();
+            if (currentView === 'home') loadPosts();
+        } catch(err) {
+            showToast('清空失败: '+err.message, 'error');
+        }
+    }
+
+    // ========== 登录/登出 ==========
     async function handleLogin() {
         const username = document.getElementById('login-username').value.trim();
         const password = document.getElementById('login-password').value.trim();
@@ -398,6 +502,16 @@
                 currentUser = data.user;
                 showToast('登录成功', 'success');
                 loadAdminPanel();
+                // 登录后立即加载配置
+                try {
+                    const cfg = await apiFetch('/config');
+                    if (cfg.blogTitle) {
+                        blogTitle = cfg.blogTitle;
+                        document.title = blogTitle;
+                        document.getElementById('site-title').textContent = blogTitle;
+                        document.getElementById('home-title').textContent = blogTitle;
+                    }
+                } catch (e) {}
             } else {
                 document.getElementById('login-error').textContent = '用户名或密码错误';
                 document.getElementById('login-error').classList.add('show');
@@ -419,6 +533,7 @@
         }
     }
 
+    // ========== 发布/删除文章 ==========
     async function handleAddPost(e) {
         e.preventDefault();
         if (!currentUser) { showToast('请先登录', 'error'); return; }
@@ -453,6 +568,7 @@
         }
     }
 
+    // 回车登录
     document.getElementById('login-password').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') handleLogin();
     });
@@ -460,8 +576,28 @@
         if (e.key === 'Enter') handleLogin();
     });
 
-    window.onload = function() { switchView('home'); };
+    // ========== 初始化 ==========
+    window.onload = async function() {
+        await loadBlogTitle();
+        switchView('home');
+        // 如果已登录，预加载管理面板（但不会自动显示）
+        try {
+            const status = await apiFetch('/auth/status');
+            if (status.isAdmin && status.user) {
+                currentUser = status.user;
+                // 加载标题
+                const cfg = await apiFetch('/config');
+                if (cfg.blogTitle) {
+                    blogTitle = cfg.blogTitle;
+                    document.title = blogTitle;
+                    document.getElementById('site-title').textContent = blogTitle;
+                    document.getElementById('home-title').textContent = blogTitle;
+                }
+            }
+        } catch (e) {}
+    };
 
+    // 暴露全局函数
     window.viewPost = viewPost;
     window.goHome = goHome;
     window.handleLogin = handleLogin;
@@ -472,7 +608,9 @@
     window.handleDeleteUser = handleDeleteUser;
     window.handleChangePassword = handleChangePassword;
     window.handleResetPassword = handleResetPassword;
+    window.handleUpdateTitle = handleUpdateTitle;
+    window.handleClearAllPosts = handleClearAllPosts;
     window.switchView = switchView;
 </script>
 </body>
-</html>
+</html>3

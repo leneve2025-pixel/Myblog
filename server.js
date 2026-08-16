@@ -13,27 +13,25 @@ const PORT = process.env.PORT || 3000;
 
 const CONFIG = {
     // ---------- GitHub 数据仓库（存放文章和用户数据） ----------
-    // 格式：'owner/repo'
-    DATA_REPO: process.env.REPO_NAME || 'leneve2025-pixel/Myblogdata',
+    DATA_REPO: process.env.REPO_NAME || 'leneve2025-pixel/Myblogdatal',
 
     // ---------- GitHub 访问令牌 ----------
-    // 在 Render 环境变量中设置 GITHUB_TOKEN，或直接填写（不推荐硬编码）
     GITHUB_TOKEN: process.env.GITHUB_TOKEN || '',
 
     // ---------- 超级管理员账号 ----------
     SUPER_ADMIN: {
-        username: 'xiaohai',   // 管理员用户名
-        password: '1357924680qW'     // 管理员密码
+        username: 'xiaohai',
+        password: '114514'
     }
 };
 
 // ============================================================
-//  以下代码无需修改（除非你了解其含义）
+//  以下代码无需修改
 // ============================================================
 
 const { DATA_REPO, GITHUB_TOKEN, SUPER_ADMIN } = CONFIG;
 if (!GITHUB_TOKEN || !DATA_REPO) {
-    console.error('❌ 缺少 GITHUB_TOKEN 或 DATA_REPO，请检查配置');
+    console.error('❌ 缺少 GITHUB_TOKEN 或 DATA_REPO');
     process.exit(1);
 }
 const [OWNER, REPO] = DATA_REPO.split('/');
@@ -42,6 +40,7 @@ const octokit = new Octokit({ auth: GITHUB_TOKEN });
 const INDEX_PATH = 'index.json';
 const POSTS_DIR = 'posts';
 const USERS_PATH = 'users.json';
+const CONFIG_PATH = 'config.json';   // 新增：存储博客标题等配置
 
 // ---------- 辅助函数 ----------
 function generateId(title, content) {
@@ -69,6 +68,7 @@ async function deleteFile(path, sha, message) {
     await octokit.repos.deleteFile({ owner: OWNER, repo: REPO, path, message, sha });
 }
 
+// ---------- 索引操作 ----------
 async function getIndex() {
     const content = await getFileContent(INDEX_PATH);
     if (!content) return { posts: [] };
@@ -77,7 +77,6 @@ async function getIndex() {
         if (!parsed.posts) parsed.posts = [];
         return parsed;
     } catch {
-        console.warn('⚠️ index.json 格式错误，重置为空索引');
         return { posts: [] };
     }
 }
@@ -92,6 +91,7 @@ async function saveIndex(index, message = '更新文章索引') {
     await saveFileContent(INDEX_PATH, JSON.stringify(index, null, 2), message, sha);
 }
 
+// ---------- 用户操作 ----------
 async function getUsers() {
     const content = await getFileContent(USERS_PATH);
     if (!content) return { users: [] };
@@ -100,7 +100,6 @@ async function getUsers() {
         if (!parsed.users) parsed.users = [];
         return parsed;
     } catch {
-        console.warn('⚠️ users.json 格式错误，重置为空列表');
         return { users: [] };
     }
 }
@@ -115,6 +114,7 @@ async function saveUsers(usersData, message = '更新用户列表') {
     await saveFileContent(USERS_PATH, JSON.stringify(usersData, null, 2), message, sha);
 }
 
+// ---------- 文章文件操作 ----------
 async function getPostContent(postId) {
     const content = await getFileContent(`${POSTS_DIR}/${postId}.json`);
     if (!content) return null;
@@ -140,15 +140,38 @@ async function deletePostFile(postId) {
     await deleteFile(path, data.sha, `删除文章 ${postId}`);
 }
 
+// ---------- 配置操作（博客标题等） ----------
+async function getConfig() {
+    const content = await getFileContent(CONFIG_PATH);
+    if (!content) return { blogTitle: '我的博客' };
+    try {
+        return JSON.parse(content);
+    } catch {
+        return { blogTitle: '我的博客' };
+    }
+}
+
+async function saveConfig(config, message = '更新配置') {
+    const existing = await getFileContent(CONFIG_PATH);
+    let sha = null;
+    if (existing) {
+        const { data } = await octokit.repos.getContent({ owner: OWNER, repo: REPO, path: CONFIG_PATH });
+        sha = data.sha;
+    }
+    await saveFileContent(CONFIG_PATH, JSON.stringify(config, null, 2), message, sha);
+}
+
 // ---------- 初始化仓库 ----------
 async function initRepo() {
     try {
+        // 初始化索引
         let index = await getIndex();
         if (!index.posts) {
             index = { posts: [] };
             await saveIndex(index, '重建空索引');
             console.log('✅ 已重建空索引');
         }
+        // 初始化用户
         const usersData = await getUsers();
         if (!usersData.users) usersData.users = [];
         const superExists = usersData.users.find(u => u.username === SUPER_ADMIN.username);
@@ -159,6 +182,12 @@ async function initRepo() {
                 role: 'super_admin',
             });
             await saveUsers(usersData, '添加超级管理员');
+        }
+        // 初始化配置
+        const config = await getConfig();
+        if (!config.blogTitle) {
+            config.blogTitle = '我的博客';
+            await saveConfig(config, '初始化博客标题');
         }
         console.log('✅ GitHub 仓库初始化完成');
     } catch (err) {
@@ -240,6 +269,31 @@ app.get('/api/auth/status', async (req, res) => {
         res.json({ isAdmin: true, user: { username: user.username, role: user.role } });
     } catch (err) {
         res.status(500).json({ error: '服务器错误' });
+    }
+});
+
+// ---------- 配置 API ----------
+app.get('/api/config', async (req, res) => {
+    try {
+        const config = await getConfig();
+        res.json({ blogTitle: config.blogTitle || '我的博客' });
+    } catch (err) {
+        res.status(500).json({ error: '获取配置失败' });
+    }
+});
+
+app.put('/api/config', isSuperAdmin, async (req, res) => {
+    try {
+        const { blogTitle } = req.body;
+        if (!blogTitle || blogTitle.trim() === '') {
+            return res.status(400).json({ error: '标题不能为空' });
+        }
+        const config = await getConfig();
+        config.blogTitle = blogTitle.trim();
+        await saveConfig(config, `修改博客标题为 "${blogTitle.trim()}"`);
+        res.json({ success: true, blogTitle: config.blogTitle });
+    } catch (err) {
+        res.status(500).json({ error: '修改标题失败' });
     }
 });
 
@@ -369,7 +423,7 @@ app.post('/api/posts', isAdmin, async (req, res) => {
         res.json({ post: newPost });
     } catch (err) {
         console.error('发布文章错误:', err);
-        res.status(500).json({ error: '发布失败，请检查 GitHub 权限或网络' });
+        res.status(500).json({ error: '发布失败' });
     }
 });
 
@@ -388,6 +442,44 @@ app.delete('/api/posts/:id', isAdmin, async (req, res) => {
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: '删除失败' });
+    }
+});
+
+// ========== 新增：清空所有文章（仅超级管理员） ==========
+app.delete('/api/posts', isSuperAdmin, async (req, res) => {
+    try {
+        // 1. 清空索引
+        await saveIndex({ posts: [] }, '清空所有文章');
+        // 2. 删除所有文章文件（通过列出 posts 目录下的文件然后逐个删除，但 GitHub API 无批量删除，需先获取所有文件列表）
+        // 简单做法：直接尝试删除 posts 目录（但目录本身不能删除，只能删除内部文件）
+        // 更可靠：获取 posts 目录内容，逐个删除文件
+        try {
+            const { data: files } = await octokit.repos.getContent({
+                owner: OWNER,
+                repo: REPO,
+                path: POSTS_DIR,
+            });
+            if (Array.isArray(files)) {
+                for (const file of files) {
+                    if (file.type === 'file' && file.name.endsWith('.json')) {
+                        await octokit.repos.deleteFile({
+                            owner: OWNER,
+                            repo: REPO,
+                            path: `${POSTS_DIR}/${file.name}`,
+                            message: `清空文章: 删除 ${file.name}`,
+                            sha: file.sha,
+                        });
+                    }
+                }
+            }
+        } catch (e) {
+            // 如果 posts 目录不存在或为空，忽略错误
+            console.warn('清空文章文件时忽略:', e.message);
+        }
+        res.json({ success: true, message: '所有文章已清空' });
+    } catch (err) {
+        console.error('清空文章失败:', err);
+        res.status(500).json({ error: '清空文章失败' });
     }
 });
 
