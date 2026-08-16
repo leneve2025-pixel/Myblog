@@ -159,7 +159,6 @@
         .user-item .del-btn { background: #e17055; color: #fff; border: none; padding: 2px 12px; border-radius: 16px; cursor: pointer; }
         .user-item .reset-btn { background: #0984e3; color: #fff; border: none; padding: 2px 12px; border-radius: 16px; cursor: pointer; }
 
-        /* 发布页特殊 */
         .publish-toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
         .publish-toolbar button { background: var(--theme-color, #4CAF50); color: #fff; border: none; padding: 6px 16px; border-radius: 20px; cursor: pointer; font-size: 14px; }
         .publish-toolbar button:hover { opacity: 0.8; }
@@ -308,7 +307,7 @@
 
 <script>
     // ============================================================
-    //  前端全局
+    //  前端逻辑
     // ============================================================
     const API_BASE = '/api';
     let currentUser = null;
@@ -317,7 +316,6 @@
     let blogTitle = '我的博客';
     let themeColor = '#4CAF50';
 
-    // ---------- 工具 ----------
     function showToast(msg, type='info') {
         const container = document.getElementById('toast-container');
         const el = document.createElement('div');
@@ -349,10 +347,8 @@
         return div.innerHTML;
     }
 
-    // 应用主题色
     function applyThemeColor(color) {
         document.documentElement.style.setProperty('--theme-color', color);
-        // 动态更新按钮颜色
         document.querySelectorAll('.admin-btn, .login-btn, .submit-btn, .publish-toolbar button, .file-input-label, .comment-input-area button').forEach(el => {
             if (!el.classList.contains('danger-btn') && !el.classList.contains('del-btn') && !el.classList.contains('reset-btn')) {
                 el.style.backgroundColor = color;
@@ -360,7 +356,6 @@
         });
     }
 
-    // ---------- 加载配置 ----------
     async function loadConfig() {
         try {
             const data = await apiFetch('/config');
@@ -382,7 +377,6 @@
         }
     }
 
-    // ---------- 文章列表 ----------
     async function loadPosts() {
         try {
             const data = await apiFetch('/posts');
@@ -414,7 +408,6 @@
         `).join('');
     }
 
-    // ---------- 查看文章 ----------
     async function viewPost(id) {
         try {
             const data = await apiFetch(`/posts/${id}`);
@@ -434,7 +427,6 @@
         }
     }
 
-    // ---------- 评论 ----------
     function renderComments(post) {
         const container = document.getElementById('comments-area');
         let html = `<div class="comments-section"><h4>💬 评论 (${post.comments ? post.comments.length : 0})</h4>`;
@@ -500,7 +492,6 @@
 
     function goHome() { switchView('home'); }
 
-    // ---------- 视图切换 ----------
     function switchView(view) {
         currentView = view;
         document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -511,7 +502,6 @@
             document.getElementById('view-detail').classList.add('active');
         } else if (view === 'publish') {
             document.getElementById('view-publish').classList.add('active');
-            // 如果未登录，跳转到登录
             if (!currentUser) {
                 showToast('请先登录', 'error');
                 switchView('admin');
@@ -537,8 +527,7 @@
         });
     });
 
-    // ---------- 封面和正文图片上传 ----------
-    // 封面
+    // 封面和图片上传
     document.getElementById('cover-upload').addEventListener('change', async function(e) {
         const file = this.files[0];
         if (!file) return;
@@ -572,7 +561,6 @@
         }
     });
 
-    // 正文图片插入
     function insertImage() {
         if (!currentUser) { showToast('请先登录', 'error'); return; }
         document.getElementById('image-upload').click();
@@ -589,7 +577,6 @@
             if (data.success) {
                 const textarea = document.getElementById('pub-content');
                 const markdown = `![${file.name}](${data.url})`;
-                // 插入到光标位置
                 const start = textarea.selectionStart;
                 const end = textarea.selectionEnd;
                 textarea.value = textarea.value.substring(0, start) + markdown + textarea.value.substring(end);
@@ -602,10 +589,9 @@
         } catch(err) {
             showToast('图片上传失败: ' + err.message, 'error');
         }
-        this.value = ''; // 重置input
+        this.value = '';
     });
 
-    // ---------- 发布文章 ----------
     async function handlePublish() {
         if (!currentUser) { showToast('请先登录', 'error'); return; }
         const title = document.getElementById('pub-title').value.trim();
@@ -625,16 +611,13 @@
             document.getElementById('pub-content').value = '';
             document.getElementById('pub-cover-url').value = '';
             document.getElementById('cover-preview').style.display = 'none';
-            // 刷新首页
             if (currentView === 'home') loadPosts();
-            // 跳转到首页
             switchView('home');
         } catch(err) {
             showToast('发布失败: '+err.message, 'error');
         }
     }
 
-    // ---------- 管理后台 ----------
     async function loadAdminPanel() {
         try {
             const data = await apiFetch('/auth/status');
@@ -698,7 +681,6 @@
         `).join('');
     }
 
-    // ---------- 用户管理 ----------
     async function loadUserList() {
         if (!currentUser || currentUser.role !== 'super_admin') return;
         try {
@@ -756,7 +738,6 @@
         }
     }
 
-    // ---------- 显示名 ----------
     async function handleUpdateDisplayName() {
         if (!currentUser) { showToast('请先登录', 'error'); return; }
         const newName = document.getElementById('display-name-input').value.trim();
@@ -775,7 +756,6 @@
         }
     }
 
-    // ---------- 密码 ----------
     async function handleChangePassword() {
         if (!currentUser) { showToast('请先登录', 'error'); return; }
         const oldPwd = document.getElementById('old-pwd').value.trim();
@@ -809,7 +789,6 @@
         }
     }
 
-    // ---------- 标题 ----------
     async function handleUpdateTitle() {
         if (!currentUser || currentUser.role !== 'super_admin') {
             showToast('权限不足', 'error');
@@ -832,7 +811,6 @@
         }
     }
 
-    // ---------- 清空文章 ----------
     async function handleClearAllPosts() {
         if (!currentUser || currentUser.role !== 'super_admin') {
             showToast('权限不足', 'error');
@@ -850,7 +828,6 @@
         }
     }
 
-    // ---------- 登录/登出 ----------
     async function handleLogin() {
         const username = document.getElementById('login-username').value.trim();
         const password = document.getElementById('login-password').value.trim();
@@ -891,7 +868,6 @@
         }
     }
 
-    // ---------- 快捷发布（管理后台） ----------
     async function handleAddPost(e) {
         e.preventDefault();
         if (!currentUser) { showToast('请先登录', 'error'); return; }
@@ -928,7 +904,6 @@
         }
     }
 
-    // 回车登录
     document.getElementById('login-password').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') handleLogin();
     });
@@ -936,7 +911,6 @@
         if (e.key === 'Enter') handleLogin();
     });
 
-    // ========== 初始化 ==========
     window.onload = async function() {
         await loadConfig();
         switchView('home');
@@ -949,7 +923,6 @@
         } catch (e) {}
     };
 
-    // 暴露全局
     window.viewPost = viewPost;
     window.goHome = goHome;
     window.handleLogin = handleLogin;

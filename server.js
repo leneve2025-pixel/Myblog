@@ -11,7 +11,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ============================================================
-//  用户配置区
+//  用户配置区（修改这里即可）
 // ============================================================
 const CONFIG = {
     DATA_REPO: process.env.REPO_NAME || 'leneve2025-pixel/Myblogdata',
@@ -209,11 +209,11 @@ app.use(session({
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
 
-// ---------- 图片上传（ImgBB） ----------
+// ---------- 图片上传 ----------
 const storage = multer.memoryStorage();
 const upload = multer({
     storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+    limits: { fileSize: 5 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
         if (file.mimetype.startsWith('image/')) {
             cb(null, true);
@@ -231,7 +231,6 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
         if (!IMGBB_API_KEY) {
             return res.status(500).json({ error: '服务器未配置图床密钥' });
         }
-        // 将图片转为 base64
         const base64 = req.file.buffer.toString('base64');
         const formData = new FormData();
         formData.append('key', IMGBB_API_KEY);
@@ -239,15 +238,20 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
         formData.append('name', req.file.originalname);
 
         const response = await axios.post('https://api.imgbb.com/1/upload', formData, {
-            headers: { ...formData.getHeaders() }
+            headers: { ...formData.getHeaders() },
+            timeout: 15000
         });
         if (response.data && response.data.data && response.data.data.url) {
             res.json({ success: true, url: response.data.data.url });
         } else {
+            console.error('ImgBB返回异常:', response.data);
             res.status(500).json({ error: '图床返回异常' });
         }
     } catch (err) {
         console.error('上传错误:', err.message);
+        if (err.response) {
+            console.error('ImgBB错误响应:', JSON.stringify(err.response.data));
+        }
         res.status(500).json({ error: '上传失败: ' + err.message });
     }
 });
@@ -409,7 +413,7 @@ app.delete('/api/users/:username', isSuperAdmin, async (req, res) => {
     }
 });
 
-// ---------- 修改显示名 ----------
+// ---------- 显示名 ----------
 app.put('/api/users/:username/displayname', async (req, res) => {
     try {
         if (!req.session.username) return res.status(401).json({ error: '未登录' });
@@ -438,7 +442,7 @@ app.put('/api/users/:username/displayname', async (req, res) => {
     }
 });
 
-// ---------- 修改密码 ----------
+// ---------- 密码 ----------
 app.put('/api/users/:username/password', async (req, res) => {
     try {
         if (!req.session.username) return res.status(401).json({ error: '未登录' });
@@ -472,7 +476,7 @@ app.put('/api/users/:username/password', async (req, res) => {
     }
 });
 
-// ---------- 文章管理 ----------
+// ---------- 文章 ----------
 app.get('/api/posts', async (req, res) => {
     try {
         const index = await getIndex();
@@ -487,6 +491,7 @@ app.get('/api/posts', async (req, res) => {
         }));
         res.json({ posts: postsWithDisplay });
     } catch (err) {
+        console.error('获取文章列表错误:', err.message);
         res.status(500).json({ error: '获取文章列表失败' });
     }
 });
@@ -502,7 +507,8 @@ app.get('/api/posts/:id', async (req, res) => {
         await savePostContent(req.params.id, post, '更新阅读数');
         res.json({ post });
     } catch (err) {
-        res.status(500).json({ error: '获取文章失败' });
+        console.error('获取文章详情错误:', err.message);
+        res.status(500).json({ error: '获取文章失败: ' + err.message });
     }
 });
 
