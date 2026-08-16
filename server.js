@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 3000;
 //  用户配置区
 // ============================================================
 const CONFIG = {
-    DATA_REPO: process.env.REPO_NAME || 'leneve2025-pixel/Myblogdatal',
+    DATA_REPO: process.env.REPO_NAME || 'leneve2025-pixel/Myblogdata',
     GITHUB_TOKEN: process.env.GITHUB_TOKEN || '',
     SUPER_ADMIN: {
         username: 'xiaohai',
