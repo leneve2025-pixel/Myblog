@@ -12,7 +12,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ============================================================
-//  用户配置区
+//  用户配置区（无需配置 BASE_PATH）
 // ============================================================
 const CONFIG = {
     DATA_REPO: process.env.REPO_NAME || 'leneve2025-pixel/Myblogdata',
@@ -22,37 +22,30 @@ const CONFIG = {
         username: 'xiaohai',
         password: '114514'
     },
-    BASE_PATH: process.env.BASE_PATH || '/xxxblog',
-    // 缓存时间（秒）
-    CACHE_TTL: 300 // 5分钟
+    CACHE_TTL: 300
 };
 
 // ============================================================
 //  核心逻辑
 // ============================================================
-const { DATA_REPO, GITHUB_TOKEN, IMGBB_API_KEY, SUPER_ADMIN, BASE_PATH, CACHE_TTL } = CONFIG;
+const { DATA_REPO, GITHUB_TOKEN, IMGBB_API_KEY, SUPER_ADMIN, CACHE_TTL } = CONFIG;
 if (!GITHUB_TOKEN || !DATA_REPO) {
     console.error('❌ 缺少 GITHUB_TOKEN 或 DATA_REPO');
     process.exit(1);
 }
 
 const [OWNER, REPO] = DATA_REPO.split('/');
-const octokit = new Octokit({ 
+const octokit = new Octokit({
     auth: GITHUB_TOKEN,
-    request: {
-        timeout: 10000 // 10秒超时
-    }
+    request: { timeout: 10000 }
 });
 
 // ---------- 内存缓存 ----------
 const cache = {
-    index: null,
-    indexTime: 0,
-    users: null,
-    usersTime: 0,
-    config: null,
-    configTime: 0,
-    posts: {} // { postId: { data, time } }
+    index: null, indexTime: 0,
+    users: null, usersTime: 0,
+    config: null, configTime: 0,
+    posts: {}
 };
 
 function isCacheValid(type) {
@@ -65,9 +58,7 @@ function isCacheValid(type) {
 
 function getPostCache(postId) {
     const entry = cache.posts[postId];
-    if (entry && (Date.now() - entry.time) < CACHE_TTL * 1000) {
-        return entry.data;
-    }
+    if (entry && (Date.now() - entry.time) < CACHE_TTL * 1000) return entry.data;
     return null;
 }
 
@@ -77,16 +68,6 @@ function setPostCache(postId, data) {
 
 function clearPostCache(postId) {
     delete cache.posts[postId];
-}
-
-function clearAllCache() {
-    cache.index = null;
-    cache.indexTime = 0;
-    cache.users = null;
-    cache.usersTime = 0;
-    cache.config = null;
-    cache.configTime = 0;
-    cache.posts = {};
 }
 
 const INDEX_PATH = 'index.json';
@@ -99,7 +80,6 @@ function generateId(title, content) {
     return crypto.createHash('md5').update(title + content).digest('hex').slice(0, 8);
 }
 
-// ---------- GitHub 文件操作（带重试） ----------
 async function getFileContent(path, retries = 3) {
     for (let i = 0; i < retries; i++) {
         try {
@@ -107,9 +87,9 @@ async function getFileContent(path, retries = 3) {
             return Buffer.from(data.content, 'base64').toString('utf8');
         } catch (error) {
             if (i === retries - 1) throw error;
-            if (error.status === 404) return null; // 文件不存在直接返回，不重试
+            if (error.status === 404) return null;
             console.warn(`⚠️ 获取文件 ${path} 失败 (${i+1}/${retries}):`, error.message);
-            await new Promise(r => setTimeout(r, 1000 * (i + 1))); // 递增等待
+            await new Promise(r => setTimeout(r, 1000 * (i + 1)));
         }
     }
     return null;
@@ -120,7 +100,6 @@ async function saveFileContent(path, content, message, sha = null) {
     const params = { owner: OWNER, repo: REPO, path, message, content: encoded };
     if (sha) params.sha = sha;
     await octokit.repos.createOrUpdateFileContents(params);
-    // 保存后清除相关缓存
     if (path === INDEX_PATH) { cache.index = null; cache.indexTime = 0; }
     if (path === USERS_PATH) { cache.users = null; cache.usersTime = 0; }
     if (path === CONFIG_PATH) { cache.config = null; cache.configTime = 0; }
@@ -222,10 +201,8 @@ async function saveConfig(config, message = '更新配置') {
 
 // ---------- 文章文件 ----------
 async function getPostContent(postId) {
-    // 先查缓存
     const cached = getPostCache(postId);
     if (cached) return cached;
-    
     const content = await getFileContent(`${POSTS_DIR}/${postId}.json`);
     if (!content) return null;
     const parsed = JSON.parse(content);
@@ -243,7 +220,6 @@ async function savePostContent(postId, postData, message) {
         sha = data.sha;
     }
     await saveFileContent(path, JSON.stringify(postData, null, 2), message, sha);
-    // 更新缓存
     setPostCache(postId, postData);
 }
 
@@ -283,9 +259,7 @@ async function initRepo(retries = 3) {
             return;
         } catch (err) {
             console.error(`❌ 初始化尝试 ${i+1}/${retries} 失败:`, err.message);
-            if (i < retries - 1) {
-                await new Promise(r => setTimeout(r, 3000));
-            }
+            if (i < retries - 1) await new Promise(r => setTimeout(r, 3000));
         }
     }
 }
@@ -296,13 +270,116 @@ setTimeout(() => {
 
 // ---------- 中间件 ----------
 app.use(bodyParser.json({ limit: '10mb' }));
-app.use(BASE_PATH, express.static('public'));
+
+// ========== 关键：自动检测子路径 ==========
+// 中间件：将请求路径前缀存储到 req.basePath
+app.use((req, res, next) => {
+    // 从请求路径中提取第一个路径段作为 basePath
+    const pathSegments = req.path.split('/').filter(Boolean);
+    if (pathSegments.length > 0) {
+        const firstSegment = pathSegments[0];
+        // 如果是 api 或 p，说明请求的是子路径下的 API 或页面
+        if (firstSegment === 'api' || firstSegment === 'p') {
+            // 需要找到真实的 basePath，从 Host 或 Referer 推断
+            const referer = req.headers.referer || '';
+            const match = referer.match(/https?:\/\/[^\/]+(\/[^\/]+)/);
+            if (match && match[1]) {
+                req.basePath = match[1];
+            } else {
+                req.basePath = '';
+            }
+        } else {
+            req.basePath = '/' + firstSegment;
+        }
+    } else {
+        req.basePath = '';
+    }
+    // 如果请求路径以 /api 或 /p 开头，且没有设置 basePath，尝试从请求路径推断
+    if (!req.basePath && (req.path.startsWith('/api') || req.path.startsWith('/p'))) {
+        // 这种情况是直接访问 /api/xxx，可能是根路径部署
+        req.basePath = '';
+    }
+    next();
+});
+
+// 静态文件托管（从请求路径中提取 basePath）
+app.use((req, res, next) => {
+    // 如果是静态资源请求（.css, .js, .png 等），使用通用路径
+    if (req.path.match(/\.(css|js|png|jpg|jpeg|gif|svg|ico)$/)) {
+        // 直接从 public 目录提供
+        const staticPath = req.path.replace(/^\/[^\/]+/, '');
+        if (staticPath !== req.path) {
+            // 重写路径，去掉第一个路径段
+            req.url = staticPath;
+        }
+        return express.static('public')(req, res, next);
+    }
+    next();
+});
+
+// 对于 HTML 请求，提取 basePath 并传递到前端
+app.get(/^\/([^\/]+)(\/|$)/, (req, res, next) => {
+    const basePath = '/' + req.params[0];
+    // 如果是 api 或 p 开头的路径，不处理
+    if (['api', 'p'].includes(req.params[0])) {
+        return next();
+    }
+    // 如果请求的是静态资源，不处理
+    if (req.path.match(/\.(css|js|png|jpg|jpeg|gif|svg|ico)$/)) {
+        return next();
+    }
+    // 否则，渲染 index.html，并在 HTML 中注入 basePath
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// 根路径处理
+app.get('/', (req, res) => {
+    // 检测是否有子路径，从 referer 或直接访问
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// 静态文件公共访问
+app.use(express.static('public'));
+
+// ---------- 会话 ----------
 app.use(session({
     secret: 'myblog-secret-key',
     resave: false,
     saveUninitialized: false,
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
+
+// ============================================================
+//  API 路由（路径自动适配）
+// ============================================================
+
+// 获取 basePath 的辅助函数
+function getBasePath(req) {
+    // 从请求头 Referer 提取
+    const referer = req.headers.referer || '';
+    const match = referer.match(/https?:\/\/[^\/]+(\/[^\/]+)/);
+    if (match && match[1]) return match[1];
+    // 从请求路径推断
+    const path = req.path;
+    const segments = path.split('/').filter(Boolean);
+    if (segments.length > 0 && segments[0] !== 'api' && segments[0] !== 'p') {
+        return '/' + segments[0];
+    }
+    return '';
+}
+
+// 包装路由，自动适配 basePath
+function autoRoute(routePath, handler) {
+    // 匹配带前缀和不带前缀两种情况
+    app.get(routePath, handler);
+    app.get(`/:prefix${routePath}`, handler);
+    app.post(routePath, handler);
+    app.post(`/:prefix${routePath}`, handler);
+    app.put(routePath, handler);
+    app.put(`/:prefix${routePath}`, handler);
+    app.delete(routePath, handler);
+    app.delete(`/:prefix${routePath}`, handler);
+}
 
 // ---------- 图片上传 ----------
 const storage = multer.memoryStorage();
@@ -318,7 +395,33 @@ const upload = multer({
     }
 });
 
-app.post(`${BASE_PATH}/api/upload`, upload.single('image'), async (req, res) => {
+app.post('/api/upload', upload.single('image'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: '未上传文件' });
+        if (!IMGBB_API_KEY) return res.status(500).json({ error: '服务器未配置图床密钥' });
+        const base64 = req.file.buffer.toString('base64');
+        const formData = new FormData();
+        formData.append('key', IMGBB_API_KEY);
+        formData.append('image', base64);
+        formData.append('name', req.file.originalname);
+
+        const response = await axios.post('https://api.imgbb.com/1/upload', formData, {
+            headers: { ...formData.getHeaders() },
+            timeout: 15000
+        });
+        if (response.data && response.data.data && response.data.data.url) {
+            res.json({ success: true, url: response.data.data.url });
+        } else {
+            res.status(500).json({ error: '图床返回异常' });
+        }
+    } catch (err) {
+        console.error('上传错误:', err.message);
+        res.status(500).json({ error: '上传失败: ' + err.message });
+    }
+});
+
+// 也支持带前缀的上传
+app.post('/:prefix/api/upload', upload.single('image'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: '未上传文件' });
         if (!IMGBB_API_KEY) return res.status(500).json({ error: '服务器未配置图床密钥' });
@@ -377,12 +480,39 @@ async function isSuperAdmin(req, res, next) {
     }
 }
 
-// ============================================================
-//  API 路由
-// ============================================================
+// ---------- API 路由（自动适配路径） ----------
+// 使用正则匹配，同时支持 /api/xxx 和 /xxx/api/xxx
+
+function wrapApi(path, handler) {
+    // 匹配 /api/xxx 和 /:prefix/api/xxx
+    app.get(path, handler);
+    app.get(/^\/([^\/]+)\/api\/.*/, (req, res) => {
+        const newPath = req.path.replace(/^\/[^\/]+\/api/, '/api');
+        req.url = newPath;
+        app.handle(req, res);
+    });
+    app.post(path, handler);
+    app.post(/^\/([^\/]+)\/api\/.*/, (req, res) => {
+        const newPath = req.path.replace(/^\/[^\/]+\/api/, '/api');
+        req.url = newPath;
+        app.handle(req, res);
+    });
+    app.put(path, handler);
+    app.put(/^\/([^\/]+)\/api\/.*/, (req, res) => {
+        const newPath = req.path.replace(/^\/[^\/]+\/api/, '/api');
+        req.url = newPath;
+        app.handle(req, res);
+    });
+    app.delete(path, handler);
+    app.delete(/^\/([^\/]+)\/api\/.*/, (req, res) => {
+        const newPath = req.path.replace(/^\/[^\/]+\/api/, '/api');
+        req.url = newPath;
+        app.handle(req, res);
+    });
+}
 
 // ---------- 认证 ----------
-app.post(`${BASE_PATH}/api/auth/login`, async (req, res) => {
+wrapApi('/api/auth/login', async (req, res) => {
     try {
         const { username, password } = req.body;
         const user = await findUserByUsername(username);
@@ -403,12 +533,12 @@ app.post(`${BASE_PATH}/api/auth/login`, async (req, res) => {
     }
 });
 
-app.post(`${BASE_PATH}/api/auth/logout`, (req, res) => {
+wrapApi('/api/auth/logout', (req, res) => {
     req.session.destroy();
     res.json({ success: true });
 });
 
-app.get(`${BASE_PATH}/api/auth/status`, async (req, res) => {
+wrapApi('/api/auth/status', async (req, res) => {
     try {
         if (!req.session.username) return res.json({ isAdmin: false, user: null });
         const user = await findUserByUsername(req.session.username);
@@ -427,7 +557,7 @@ app.get(`${BASE_PATH}/api/auth/status`, async (req, res) => {
 });
 
 // ---------- 配置 ----------
-app.get(`${BASE_PATH}/api/config`, async (req, res) => {
+wrapApi('/api/config', async (req, res) => {
     try {
         const config = await getConfig();
         res.json(config);
@@ -436,7 +566,7 @@ app.get(`${BASE_PATH}/api/config`, async (req, res) => {
     }
 });
 
-app.put(`${BASE_PATH}/api/config`, isSuperAdmin, async (req, res) => {
+wrapApi('/api/config', isSuperAdmin, async (req, res) => {
     try {
         const { blogTitle, themeColor, wallpaper } = req.body;
         const config = await getConfig();
@@ -451,7 +581,7 @@ app.put(`${BASE_PATH}/api/config`, isSuperAdmin, async (req, res) => {
 });
 
 // ---------- 用户管理 ----------
-app.get(`${BASE_PATH}/api/users`, isSuperAdmin, async (req, res) => {
+wrapApi('/api/users', isSuperAdmin, async (req, res) => {
     try {
         const usersData = await getUsers();
         const safeUsers = usersData.users.map(u => ({
@@ -466,7 +596,7 @@ app.get(`${BASE_PATH}/api/users`, isSuperAdmin, async (req, res) => {
     }
 });
 
-app.post(`${BASE_PATH}/api/users`, isSuperAdmin, async (req, res) => {
+wrapApi('/api/users', isSuperAdmin, async (req, res) => {
     try {
         const { username, password } = req.body;
         if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
@@ -488,7 +618,7 @@ app.post(`${BASE_PATH}/api/users`, isSuperAdmin, async (req, res) => {
     }
 });
 
-app.delete(`${BASE_PATH}/api/users/:username`, isSuperAdmin, async (req, res) => {
+wrapApi('/api/users/:username', isSuperAdmin, async (req, res) => {
     try {
         const target = req.params.username;
         if (target === req.user.username) return res.status(400).json({ error: '不能删除自己' });
@@ -507,7 +637,7 @@ app.delete(`${BASE_PATH}/api/users/:username`, isSuperAdmin, async (req, res) =>
 });
 
 // ---------- 显示名 ----------
-app.put(`${BASE_PATH}/api/users/:username/displayname`, async (req, res) => {
+wrapApi('/api/users/:username/displayname', async (req, res) => {
     try {
         if (!req.session.username) return res.status(401).json({ error: '未登录' });
         const currentUser = await findUserByUsername(req.session.username);
@@ -536,7 +666,7 @@ app.put(`${BASE_PATH}/api/users/:username/displayname`, async (req, res) => {
 });
 
 // ---------- 头像 ----------
-app.put(`${BASE_PATH}/api/users/:username/avatar`, async (req, res) => {
+wrapApi('/api/users/:username/avatar', async (req, res) => {
     try {
         if (!req.session.username) return res.status(401).json({ error: '未登录' });
         const currentUser = await findUserByUsername(req.session.username);
@@ -566,7 +696,7 @@ app.put(`${BASE_PATH}/api/users/:username/avatar`, async (req, res) => {
 });
 
 // ---------- 密码 ----------
-app.put(`${BASE_PATH}/api/users/:username/password`, async (req, res) => {
+wrapApi('/api/users/:username/password', async (req, res) => {
     try {
         if (!req.session.username) return res.status(401).json({ error: '未登录' });
         const currentUser = await findUserByUsername(req.session.username);
@@ -600,7 +730,7 @@ app.put(`${BASE_PATH}/api/users/:username/password`, async (req, res) => {
 });
 
 // ---------- 文章 ----------
-app.get(`${BASE_PATH}/api/posts`, async (req, res) => {
+wrapApi('/api/posts', async (req, res) => {
     try {
         const index = await getIndex();
         const usersData = await getUsers();
@@ -626,7 +756,7 @@ app.get(`${BASE_PATH}/api/posts`, async (req, res) => {
     }
 });
 
-app.get(`${BASE_PATH}/api/posts/:id`, async (req, res) => {
+wrapApi('/api/posts/:id', async (req, res) => {
     try {
         const post = await getPostContent(req.params.id);
         if (!post) return res.status(404).json({ error: '文章不存在' });
@@ -643,7 +773,7 @@ app.get(`${BASE_PATH}/api/posts/:id`, async (req, res) => {
     }
 });
 
-app.post(`${BASE_PATH}/api/posts`, isAdmin, async (req, res) => {
+wrapApi('/api/posts', isAdmin, async (req, res) => {
     try {
         const { title, content, cover } = req.body;
         if (!title || !content) return res.status(400).json({ error: '标题和内容不能为空' });
@@ -672,10 +802,14 @@ app.post(`${BASE_PATH}/api/posts`, isAdmin, async (req, res) => {
         const user = usersData.users.find(u => u.username === req.user.username);
         newPost.authorDisplay = user ? (user.displayName || user.username) : req.user.username;
         newPost.authorAvatar = user ? (user.avatar || '') : '';
-        
-        const fullUrl = `${req.protocol}://${req.get('host')}${BASE_PATH}/p/${id}`;
-        
-        res.json({ 
+
+        // 获取 basePath
+        const referer = req.headers.referer || '';
+        const basePathMatch = referer.match(/https?:\/\/[^\/]+(\/[^\/]+)/);
+        const basePath = basePathMatch ? basePathMatch[1] : '';
+        const fullUrl = `${req.protocol}://${req.get('host')}${basePath}/p/${id}`;
+
+        res.json({
             post: newPost,
             url: fullUrl
         });
@@ -685,7 +819,7 @@ app.post(`${BASE_PATH}/api/posts`, isAdmin, async (req, res) => {
     }
 });
 
-app.delete(`${BASE_PATH}/api/posts/:id`, isAdmin, async (req, res) => {
+wrapApi('/api/posts/:id', isAdmin, async (req, res) => {
     try {
         const index = await getIndex();
         const idx = index.posts.findIndex(p => p.id === req.params.id);
@@ -703,7 +837,7 @@ app.delete(`${BASE_PATH}/api/posts/:id`, isAdmin, async (req, res) => {
     }
 });
 
-app.delete(`${BASE_PATH}/api/posts`, isSuperAdmin, async (req, res) => {
+wrapApi('/api/posts', isSuperAdmin, async (req, res) => {
     try {
         await saveIndex({ posts: [] }, '清空所有文章');
         try {
@@ -733,7 +867,7 @@ app.delete(`${BASE_PATH}/api/posts`, isSuperAdmin, async (req, res) => {
 });
 
 // ---------- 评论 ----------
-app.post(`${BASE_PATH}/api/posts/:id/comments`, isAdmin, async (req, res) => {
+wrapApi('/api/posts/:id/comments', isAdmin, async (req, res) => {
     try {
         const postId = req.params.id;
         const { content } = req.body;
@@ -764,7 +898,7 @@ app.post(`${BASE_PATH}/api/posts/:id/comments`, isAdmin, async (req, res) => {
     }
 });
 
-app.delete(`${BASE_PATH}/api/posts/:postId/comments/:commentId`, isAdmin, async (req, res) => {
+wrapApi('/api/posts/:postId/comments/:commentId', isAdmin, async (req, res) => {
     try {
         const { postId, commentId } = req.params;
         const post = await getPostContent(postId);
@@ -786,13 +920,17 @@ app.delete(`${BASE_PATH}/api/posts/:postId/comments/:commentId`, isAdmin, async 
     }
 });
 
-// ========== 梯子路径 ==========
-app.get(`${BASE_PATH}/p/:id`, (req, res) => {
+// ---------- 梯子路径 ----------
+app.get('/p/:id', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/:prefix/p/:id', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // ---------- 启动 ----------
 app.listen(PORT, () => {
-    console.log(`博客服务已启动: http://localhost:${PORT}${BASE_PATH}`);
-    console.log(`访问地址: http://localhost:${PORT}${BASE_PATH}/`);
+    console.log(`博客服务已启动: http://localhost:${PORT}`);
+    console.log(`访问地址: http://localhost:${PORT}/ (会自动识别子路径)`);
 });
