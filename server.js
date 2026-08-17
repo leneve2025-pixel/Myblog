@@ -580,6 +580,50 @@ wrapApi('/api/config', isSuperAdmin, async (req, res) => {
     }
 });
 
+// ---------- 启动引导（合并 配置 + 文章列表 + 登录态，减少多次往返） ----------
+wrapApi('/api/bootstrap', async (req, res) => {
+    try {
+        const [config, index, usersData] = await Promise.all([
+            getConfig(),
+            getIndex(),
+            getUsers()
+        ]);
+        const userMap = {};
+        (usersData.users || []).forEach(u => {
+            userMap[u.username] = {
+                displayName: u.displayName || u.username,
+                avatar: u.avatar || ''
+            };
+        });
+        const posts = (index.posts || []).map(p => {
+            const user = userMap[p.author];
+            return {
+                ...p,
+                authorDisplay: user ? user.displayName : (p.author || '未知'),
+                authorAvatar: user ? user.avatar : ''
+            };
+        });
+        let auth = { isAdmin: false, user: null };
+        if (req.session && req.session.username) {
+            const user = (usersData.users || []).find(u => u.username === req.session.username);
+            if (user) {
+                auth = {
+                    isAdmin: true,
+                    user: {
+                        username: user.username,
+                        role: user.role,
+                        displayName: user.displayName || user.username
+                    }
+                };
+            }
+        }
+        res.json({ config, posts, auth });
+    } catch (err) {
+        console.error('bootstrap 错误:', err.message);
+        res.status(500).json({ error: '初始化失败: ' + err.message });
+    }
+});
+
 // ---------- 用户管理 ----------
 wrapApi('/api/users', isSuperAdmin, async (req, res) => {
     try {

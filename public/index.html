@@ -4,12 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title id="page-title">我的博客</title>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+    <!-- 字体：改用系统字体栈，移除 Google Fonts，避免在国内被墙导致首屏长时间空白 -->
+    <!-- Font Awesome：非阻塞加载（media=print + onload），不阻塞首屏渲染，图标加载完成后自动生效 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" media="print" onload="this.media='all'" />
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" /></noscript>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: 'Roboto', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
             background: #f5f5f5;
             color: #1c1c1c;
             padding: 20px;
@@ -666,7 +668,13 @@
         document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
         if (view === 'home') {
             document.getElementById('view-home').classList.add('active');
-            loadPosts();
+            if (window._bootstrapPostsReady) {
+                // 首屏已由 bootstrap 加载，避免重复请求；之后切回首页再刷新
+                window._bootstrapPostsReady = false;
+                renderPostList();
+            } else {
+                loadPosts();
+            }
         } else if (view === 'detail') {
             document.getElementById('view-detail').classList.add('active');
         } else if (view === 'publish') {
@@ -1186,10 +1194,40 @@
     window.onload = async function() {
         showLoading();
         try {
-            await loadConfig();
+            // 一次性获取：站点配置 + 文章列表 + 登录态（原来需要 3 次往返，现合并为 1 次）
+            const data = await apiFetch('/bootstrap');
+
+            // 应用站点配置
+            if (data.config) {
+                if (data.config.blogTitle) {
+                    blogTitle = data.config.blogTitle;
+                    document.title = blogTitle;
+                    document.getElementById('site-title').textContent = blogTitle;
+                    document.getElementById('home-title').textContent = blogTitle;
+                }
+                if (data.config.themeColor) {
+                    themeColor = data.config.themeColor;
+                    applyThemeColor(themeColor);
+                    document.querySelector('#loading-screen .spinner')?.style.setProperty('border-top-color', themeColor);
+                }
+                if (data.config.wallpaper) {
+                    document.body.style.backgroundImage = `url(${data.config.wallpaper})`;
+                }
+            }
+
             loadDraft();
 
-            // 检测梯子路径 /p/文章ID
+            // 文章列表（已随 bootstrap 返回，无需再单独请求）
+            posts = data.posts || [];
+            window._bootstrapPostsReady = true;
+            renderPostList();
+
+            // 登录态
+            if (data.auth && data.auth.isAdmin && data.auth.user) {
+                currentUser = data.auth.user;
+            }
+
+            // 检测梯子路径 /p/文章ID（分享链接直达文章）
             const path = window.location.pathname;
             const match = path.match(/\/p\/([a-f0-9]+)/);
             if (match) {
@@ -1205,13 +1243,6 @@
             }
 
             switchView('home');
-            try {
-                const status = await apiFetch('/auth/status');
-                if (status.isAdmin && status.user) {
-                    currentUser = status.user;
-                    await loadConfig();
-                }
-            } catch (e) {}
             hideLoading();
         } catch (err) {
             console.error('初始化失败:', err);
