@@ -3,6 +3,10 @@ const session = require('express-session');
 const bodyParser = require('body-parser');
 const crypto = require('crypto');
 const { Octokit } = require('@octokit/rest');
+const multer = require('multer');
+const axios = require('axios');
+const FormData = require('form-data');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -13,23 +17,77 @@ const PORT = process.env.PORT || 3000;
 const CONFIG = {
     DATA_REPO: process.env.REPO_NAME || 'leneve2025-pixel/Myblogdata',
     GITHUB_TOKEN: process.env.GITHUB_TOKEN || '',
+    IMGBB_API_KEY: process.env.IMGBB_API_KEY || 'c236b3b6ca6d92c602ed045dcc21e7e1',
     SUPER_ADMIN: {
         username: 'xiaohai',
         password: '114514'
-    }
+    },
+    BASE_PATH: process.env.BASE_PATH || '/xxxblog',
+    // 缓存时间（秒）
+    CACHE_TTL: 300 // 5分钟
 };
 
 // ============================================================
 //  核心逻辑
 // ============================================================
-const { DATA_REPO, GITHUB_TOKEN, SUPER_ADMIN } = CONFIG;
+const { DATA_REPO, GITHUB_TOKEN, IMGBB_API_KEY, SUPER_ADMIN, BASE_PATH, CACHE_TTL } = CONFIG;
 if (!GITHUB_TOKEN || !DATA_REPO) {
     console.error('❌ 缺少 GITHUB_TOKEN 或 DATA_REPO');
     process.exit(1);
 }
 
 const [OWNER, REPO] = DATA_REPO.split('/');
-const octokit = new Octokit({ auth: GITHUB_TOKEN });
+const octokit = new Octokit({ 
+    auth: GITHUB_TOKEN,
+    request: {
+        timeout: 10000 // 10秒超时
+    }
+});
+
+// ---------- 内存缓存 ----------
+const cache = {
+    index: null,
+    indexTime: 0,
+    users: null,
+    usersTime: 0,
+    config: null,
+    configTime: 0,
+    posts: {} // { postId: { data, time } }
+};
+
+function isCacheValid(type) {
+    const now = Date.now();
+    if (type === 'index') return cache.index && (now - cache.indexTime) < CACHE_TTL * 1000;
+    if (type === 'users') return cache.users && (now - cache.usersTime) < CACHE_TTL * 1000;
+    if (type === 'config') return cache.config && (now - cache.configTime) < CACHE_TTL * 1000;
+    return false;
+}
+
+function getPostCache(postId) {
+    const entry = cache.posts[postId];
+    if (entry && (Date.now() - entry.time) < CACHE_TTL * 1000) {
+        return entry.data;
+    }
+    return null;
+}
+
+function setPostCache(postId, data) {
+    cache.posts[postId] = { data, time: Date.now() };
+}
+
+function clearPostCache(postId) {
+    delete cache.posts[postId];
+}
+
+function clearAllCache() {
+    cache.index = null;
+    cache.indexTime = 0;
+    cache.users = null;
+    cache.usersTime = 0;
+    cache.config = null;
+    cache.configTime = 0;
+    cache.posts = {};
+}
 
 const INDEX_PATH = 'index.json';
 const POSTS_DIR = 'posts';
@@ -41,14 +99,20 @@ function generateId(title, content) {
     return crypto.createHash('md5').update(title + content).digest('hex').slice(0, 8);
 }
 
-async function getFileContent(path) {
-    try {
-        const { data } = await octokit.repos.getContent({ owner: OWNER, repo: REPO, path });
-        return Buffer.from(data.content, 'base64').toString('utf8');
-    } catch (error) {
-        if (error.status === 404) return null;
-        throw error;
+// ---------- GitHub 文件操作（带重试） ----------
+async function getFileContent(path, retries = 3) {
+    for (let i = 0; i < retries; i++) {
+        try {
+            const { data } = await octokit.repos.getContent({ owner: OWNER, repo: REPO, path });
+            return Buffer.from(data.content, 'base64').toString('utf8');
+        } catch (error) {
+            if (i === retries - 1) throw error;
+            if (error.status === 404) return null; // 文件不存在直接返回，不重试
+            console.warn(`⚠️ 获取文件 ${path} 失败 (${i+1}/${retries}):`, error.message);
+            await new Promise(r => setTimeout(r, 1000 * (i + 1))); // 递增等待
+        }
     }
+    return null;
 }
 
 async function saveFileContent(path, content, message, sha = null) {
@@ -56,19 +120,34 @@ async function saveFileContent(path, content, message, sha = null) {
     const params = { owner: OWNER, repo: REPO, path, message, content: encoded };
     if (sha) params.sha = sha;
     await octokit.repos.createOrUpdateFileContents(params);
+    // 保存后清除相关缓存
+    if (path === INDEX_PATH) { cache.index = null; cache.indexTime = 0; }
+    if (path === USERS_PATH) { cache.users = null; cache.usersTime = 0; }
+    if (path === CONFIG_PATH) { cache.config = null; cache.configTime = 0; }
+    if (path.startsWith(POSTS_DIR)) {
+        const postId = path.replace(`${POSTS_DIR}/`, '').replace('.json', '');
+        clearPostCache(postId);
+    }
 }
 
 async function deleteFile(path, sha, message) {
     await octokit.repos.deleteFile({ owner: OWNER, repo: REPO, path, message, sha });
+    if (path.startsWith(POSTS_DIR)) {
+        const postId = path.replace(`${POSTS_DIR}/`, '').replace('.json', '');
+        clearPostCache(postId);
+    }
 }
 
 // ---------- 索引 ----------
 async function getIndex() {
+    if (isCacheValid('index')) return cache.index;
     const content = await getFileContent(INDEX_PATH);
     if (!content) return { posts: [] };
     try {
         const parsed = JSON.parse(content);
         if (!parsed.posts) parsed.posts = [];
+        cache.index = parsed;
+        cache.indexTime = Date.now();
         return parsed;
     } catch {
         return { posts: [] };
@@ -87,11 +166,14 @@ async function saveIndex(index, message = '更新文章索引') {
 
 // ---------- 用户 ----------
 async function getUsers() {
+    if (isCacheValid('users')) return cache.users;
     const content = await getFileContent(USERS_PATH);
     if (!content) return { users: [] };
     try {
         const parsed = JSON.parse(content);
         if (!parsed.users) parsed.users = [];
+        cache.users = parsed;
+        cache.usersTime = Date.now();
         return parsed;
     } catch {
         return { users: [] };
@@ -110,6 +192,7 @@ async function saveUsers(usersData, message = '更新用户列表') {
 
 // ---------- 配置 ----------
 async function getConfig() {
+    if (isCacheValid('config')) return cache.config;
     const content = await getFileContent(CONFIG_PATH);
     if (!content) {
         return { blogTitle: '我的博客', themeColor: '#4CAF50', wallpaper: '' };
@@ -119,6 +202,8 @@ async function getConfig() {
         if (!parsed.blogTitle) parsed.blogTitle = '我的博客';
         if (!parsed.themeColor) parsed.themeColor = '#4CAF50';
         if (!parsed.wallpaper) parsed.wallpaper = '';
+        cache.config = parsed;
+        cache.configTime = Date.now();
         return parsed;
     } catch {
         return { blogTitle: '我的博客', themeColor: '#4CAF50', wallpaper: '' };
@@ -137,10 +222,15 @@ async function saveConfig(config, message = '更新配置') {
 
 // ---------- 文章文件 ----------
 async function getPostContent(postId) {
+    // 先查缓存
+    const cached = getPostCache(postId);
+    if (cached) return cached;
+    
     const content = await getFileContent(`${POSTS_DIR}/${postId}.json`);
     if (!content) return null;
     const parsed = JSON.parse(content);
     if (!parsed.comments) parsed.comments = [];
+    setPostCache(postId, parsed);
     return parsed;
 }
 
@@ -153,6 +243,8 @@ async function savePostContent(postId, postData, message) {
         sha = data.sha;
     }
     await saveFileContent(path, JSON.stringify(postData, null, 2), message, sha);
+    // 更新缓存
+    setPostCache(postId, postData);
 }
 
 async function deletePostFile(postId) {
@@ -161,47 +253,95 @@ async function deletePostFile(postId) {
     if (!content) return;
     const { data } = await octokit.repos.getContent({ owner: OWNER, repo: REPO, path });
     await deleteFile(path, data.sha, `删除文章 ${postId}`);
+    clearPostCache(postId);
 }
 
 // ---------- 初始化 ----------
-async function initRepo() {
-    try {
-        let index = await getIndex();
-        if (!index.posts) {
-            index = { posts: [] };
-            await saveIndex(index, '重建空索引');
+async function initRepo(retries = 3) {
+    for (let i = 0; i < retries; i++) {
+        try {
+            let index = await getIndex();
+            if (!index.posts) {
+                index = { posts: [] };
+                await saveIndex(index, '重建空索引');
+            }
+            const usersData = await getUsers();
+            if (!usersData.users) usersData.users = [];
+            const superExists = usersData.users.find(u => u.username === SUPER_ADMIN.username);
+            if (!superExists) {
+                usersData.users.push({
+                    username: SUPER_ADMIN.username,
+                    password: SUPER_ADMIN.password,
+                    role: 'super_admin',
+                    displayName: SUPER_ADMIN.username
+                });
+                await saveUsers(usersData, '添加超级管理员');
+            }
+            const config = await getConfig();
+            await saveConfig(config, '初始化配置');
+            console.log('✅ GitHub 仓库初始化完成');
+            return;
+        } catch (err) {
+            console.error(`❌ 初始化尝试 ${i+1}/${retries} 失败:`, err.message);
+            if (i < retries - 1) {
+                await new Promise(r => setTimeout(r, 3000));
+            }
         }
-        const usersData = await getUsers();
-        if (!usersData.users) usersData.users = [];
-        const superExists = usersData.users.find(u => u.username === SUPER_ADMIN.username);
-        if (!superExists) {
-            usersData.users.push({
-                username: SUPER_ADMIN.username,
-                password: SUPER_ADMIN.password,
-                role: 'super_admin',
-                displayName: SUPER_ADMIN.username,
-                avatar: '' // 头像字段
-            });
-            await saveUsers(usersData, '添加超级管理员');
-        }
-        const config = await getConfig();
-        await saveConfig(config, '初始化配置');
-        console.log('✅ GitHub 仓库初始化完成');
-    } catch (err) {
-        console.error('❌ 初始化失败:', err.message);
     }
 }
-initRepo();
+
+setTimeout(() => {
+    initRepo().catch(console.error);
+}, 3000);
 
 // ---------- 中间件 ----------
 app.use(bodyParser.json({ limit: '10mb' }));
-app.use(express.static('public'));
+app.use(BASE_PATH, express.static('public'));
 app.use(session({
     secret: 'myblog-secret-key',
     resave: false,
     saveUninitialized: false,
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
+
+// ---------- 图片上传 ----------
+const storage = multer.memoryStorage();
+const upload = multer({
+    storage,
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype.startsWith('image/')) {
+            cb(null, true);
+        } else {
+            cb(new Error('只允许图片格式'), false);
+        }
+    }
+});
+
+app.post(`${BASE_PATH}/api/upload`, upload.single('image'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: '未上传文件' });
+        if (!IMGBB_API_KEY) return res.status(500).json({ error: '服务器未配置图床密钥' });
+        const base64 = req.file.buffer.toString('base64');
+        const formData = new FormData();
+        formData.append('key', IMGBB_API_KEY);
+        formData.append('image', base64);
+        formData.append('name', req.file.originalname);
+
+        const response = await axios.post('https://api.imgbb.com/1/upload', formData, {
+            headers: { ...formData.getHeaders() },
+            timeout: 15000
+        });
+        if (response.data && response.data.data && response.data.data.url) {
+            res.json({ success: true, url: response.data.data.url });
+        } else {
+            res.status(500).json({ error: '图床返回异常' });
+        }
+    } catch (err) {
+        console.error('上传错误:', err.message);
+        res.status(500).json({ error: '上传失败: ' + err.message });
+    }
+});
 
 // ---------- 辅助 ----------
 async function findUserByUsername(username) {
@@ -237,8 +377,12 @@ async function isSuperAdmin(req, res, next) {
     }
 }
 
+// ============================================================
+//  API 路由
+// ============================================================
+
 // ---------- 认证 ----------
-app.post('/api/auth/login', async (req, res) => {
+app.post(`${BASE_PATH}/api/auth/login`, async (req, res) => {
     try {
         const { username, password } = req.body;
         const user = await findUserByUsername(username);
@@ -251,8 +395,7 @@ app.post('/api/auth/login', async (req, res) => {
             user: {
                 username: user.username,
                 role: user.role,
-                displayName: user.displayName || user.username,
-                avatar: user.avatar || ''
+                displayName: user.displayName || user.username
             }
         });
     } catch (err) {
@@ -260,12 +403,12 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
-app.post('/api/auth/logout', (req, res) => {
+app.post(`${BASE_PATH}/api/auth/logout`, (req, res) => {
     req.session.destroy();
     res.json({ success: true });
 });
 
-app.get('/api/auth/status', async (req, res) => {
+app.get(`${BASE_PATH}/api/auth/status`, async (req, res) => {
     try {
         if (!req.session.username) return res.json({ isAdmin: false, user: null });
         const user = await findUserByUsername(req.session.username);
@@ -275,8 +418,7 @@ app.get('/api/auth/status', async (req, res) => {
             user: {
                 username: user.username,
                 role: user.role,
-                displayName: user.displayName || user.username,
-                avatar: user.avatar || ''
+                displayName: user.displayName || user.username
             }
         });
     } catch (err) {
@@ -285,7 +427,7 @@ app.get('/api/auth/status', async (req, res) => {
 });
 
 // ---------- 配置 ----------
-app.get('/api/config', async (req, res) => {
+app.get(`${BASE_PATH}/api/config`, async (req, res) => {
     try {
         const config = await getConfig();
         res.json(config);
@@ -294,7 +436,7 @@ app.get('/api/config', async (req, res) => {
     }
 });
 
-app.put('/api/config', isSuperAdmin, async (req, res) => {
+app.put(`${BASE_PATH}/api/config`, isSuperAdmin, async (req, res) => {
     try {
         const { blogTitle, themeColor, wallpaper } = req.body;
         const config = await getConfig();
@@ -309,7 +451,7 @@ app.put('/api/config', isSuperAdmin, async (req, res) => {
 });
 
 // ---------- 用户管理 ----------
-app.get('/api/users', isSuperAdmin, async (req, res) => {
+app.get(`${BASE_PATH}/api/users`, isSuperAdmin, async (req, res) => {
     try {
         const usersData = await getUsers();
         const safeUsers = usersData.users.map(u => ({
@@ -324,7 +466,7 @@ app.get('/api/users', isSuperAdmin, async (req, res) => {
     }
 });
 
-app.post('/api/users', isSuperAdmin, async (req, res) => {
+app.post(`${BASE_PATH}/api/users`, isSuperAdmin, async (req, res) => {
     try {
         const { username, password } = req.body;
         if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
@@ -340,13 +482,13 @@ app.post('/api/users', isSuperAdmin, async (req, res) => {
             avatar: ''
         });
         await saveUsers(usersData, `添加管理员 ${username}`);
-        res.json({ success: true, user: { username, role: 'admin', displayName: username, avatar: '' } });
+        res.json({ success: true, user: { username, role: 'admin', displayName: username } });
     } catch (err) {
         res.status(500).json({ error: '创建用户失败' });
     }
 });
 
-app.delete('/api/users/:username', isSuperAdmin, async (req, res) => {
+app.delete(`${BASE_PATH}/api/users/:username`, isSuperAdmin, async (req, res) => {
     try {
         const target = req.params.username;
         if (target === req.user.username) return res.status(400).json({ error: '不能删除自己' });
@@ -364,8 +506,8 @@ app.delete('/api/users/:username', isSuperAdmin, async (req, res) => {
     }
 });
 
-// ---------- 修改显示名 ----------
-app.put('/api/users/:username/displayname', async (req, res) => {
+// ---------- 显示名 ----------
+app.put(`${BASE_PATH}/api/users/:username/displayname`, async (req, res) => {
     try {
         if (!req.session.username) return res.status(401).json({ error: '未登录' });
         const currentUser = await findUserByUsername(req.session.username);
@@ -393,26 +535,17 @@ app.put('/api/users/:username/displayname', async (req, res) => {
     }
 });
 
-// ---------- 修改头像（Base64） ----------
-app.put('/api/users/:username/avatar', async (req, res) => {
+// ---------- 头像 ----------
+app.put(`${BASE_PATH}/api/users/:username/avatar`, async (req, res) => {
     try {
         if (!req.session.username) return res.status(401).json({ error: '未登录' });
         const currentUser = await findUserByUsername(req.session.username);
         if (!currentUser) return res.status(401).json({ error: '会话无效' });
 
         const targetUsername = req.params.username;
-        const { avatar } = req.body; // Base64 字符串
+        const { avatar } = req.body;
         if (!avatar || avatar.trim() === '') {
-            return res.status(400).json({ error: '头像数据不能为空' });
-        }
-        // 简单验证是否为 base64 图片
-        if (!avatar.startsWith('data:image/')) {
-            return res.status(400).json({ error: '无效的头像数据，需要 data:image/... 格式' });
-        }
-        // 限制大小（约 200KB）
-        const sizeInBytes = Buffer.from(avatar.split(',')[1] || '', 'base64').length;
-        if (sizeInBytes > 200 * 1024) {
-            return res.status(400).json({ error: '头像大小不能超过200KB' });
+            return res.status(400).json({ error: '头像 URL 不能为空' });
         }
 
         if (currentUser.role !== 'super_admin' && currentUser.username !== targetUsername) {
@@ -432,8 +565,8 @@ app.put('/api/users/:username/avatar', async (req, res) => {
     }
 });
 
-// ---------- 修改密码 ----------
-app.put('/api/users/:username/password', async (req, res) => {
+// ---------- 密码 ----------
+app.put(`${BASE_PATH}/api/users/:username/password`, async (req, res) => {
     try {
         if (!req.session.username) return res.status(401).json({ error: '未登录' });
         const currentUser = await findUserByUsername(req.session.username);
@@ -467,7 +600,7 @@ app.put('/api/users/:username/password', async (req, res) => {
 });
 
 // ---------- 文章 ----------
-app.get('/api/posts', async (req, res) => {
+app.get(`${BASE_PATH}/api/posts`, async (req, res) => {
     try {
         const index = await getIndex();
         const usersData = await getUsers();
@@ -479,11 +612,11 @@ app.get('/api/posts', async (req, res) => {
             };
         });
         const postsWithDisplay = index.posts.map(p => {
-            const user = userMap[p.author] || { displayName: p.author || '未知', avatar: '' };
+            const user = userMap[p.author];
             return {
                 ...p,
-                authorDisplay: user.displayName,
-                authorAvatar: user.avatar
+                authorDisplay: user ? user.displayName : (p.author || '未知'),
+                authorAvatar: user ? user.avatar : ''
             };
         });
         res.json({ posts: postsWithDisplay });
@@ -493,7 +626,7 @@ app.get('/api/posts', async (req, res) => {
     }
 });
 
-app.get('/api/posts/:id', async (req, res) => {
+app.get(`${BASE_PATH}/api/posts/:id`, async (req, res) => {
     try {
         const post = await getPostContent(req.params.id);
         if (!post) return res.status(404).json({ error: '文章不存在' });
@@ -510,9 +643,9 @@ app.get('/api/posts/:id', async (req, res) => {
     }
 });
 
-app.post('/api/posts', isAdmin, async (req, res) => {
+app.post(`${BASE_PATH}/api/posts`, isAdmin, async (req, res) => {
     try {
-        const { title, content } = req.body; // 移除 cover
+        const { title, content, cover } = req.body;
         if (!title || !content) return res.status(400).json({ error: '标题和内容不能为空' });
         const id = generateId(title, content);
         const index = await getIndex();
@@ -521,6 +654,7 @@ app.post('/api/posts', isAdmin, async (req, res) => {
         }
         const newPost = {
             id, title, content,
+            cover: cover || '',
             createdAt: Date.now(),
             views: 0,
             author: req.user.username,
@@ -531,20 +665,27 @@ app.post('/api/posts', isAdmin, async (req, res) => {
             id, title,
             author: req.user.username,
             createdAt: newPost.createdAt,
+            cover: newPost.cover,
         });
         await saveIndex(index, `添加文章 ${title}`);
         const usersData = await getUsers();
         const user = usersData.users.find(u => u.username === req.user.username);
         newPost.authorDisplay = user ? (user.displayName || user.username) : req.user.username;
         newPost.authorAvatar = user ? (user.avatar || '') : '';
-        res.json({ post: newPost });
+        
+        const fullUrl = `${req.protocol}://${req.get('host')}${BASE_PATH}/p/${id}`;
+        
+        res.json({ 
+            post: newPost,
+            url: fullUrl
+        });
     } catch (err) {
         console.error('发布文章错误:', err);
         res.status(500).json({ error: '发布失败' });
     }
 });
 
-app.delete('/api/posts/:id', isAdmin, async (req, res) => {
+app.delete(`${BASE_PATH}/api/posts/:id`, isAdmin, async (req, res) => {
     try {
         const index = await getIndex();
         const idx = index.posts.findIndex(p => p.id === req.params.id);
@@ -562,7 +703,7 @@ app.delete('/api/posts/:id', isAdmin, async (req, res) => {
     }
 });
 
-app.delete('/api/posts', isSuperAdmin, async (req, res) => {
+app.delete(`${BASE_PATH}/api/posts`, isSuperAdmin, async (req, res) => {
     try {
         await saveIndex({ posts: [] }, '清空所有文章');
         try {
@@ -592,7 +733,7 @@ app.delete('/api/posts', isSuperAdmin, async (req, res) => {
 });
 
 // ---------- 评论 ----------
-app.post('/api/posts/:id/comments', isAdmin, async (req, res) => {
+app.post(`${BASE_PATH}/api/posts/:id/comments`, isAdmin, async (req, res) => {
     try {
         const postId = req.params.id;
         const { content } = req.body;
@@ -605,13 +746,11 @@ app.post('/api/posts/:id/comments', isAdmin, async (req, res) => {
         const usersData = await getUsers();
         const user = usersData.users.find(u => u.username === req.user.username);
         const displayName = user ? (user.displayName || user.username) : req.user.username;
-        const avatar = user ? (user.avatar || '') : '';
 
         const comment = {
             id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
             author: req.user.username,
             authorDisplay: displayName,
-            authorAvatar: avatar,
             content: content.trim(),
             createdAt: Date.now()
         };
@@ -625,7 +764,7 @@ app.post('/api/posts/:id/comments', isAdmin, async (req, res) => {
     }
 });
 
-app.delete('/api/posts/:postId/comments/:commentId', isAdmin, async (req, res) => {
+app.delete(`${BASE_PATH}/api/posts/:postId/comments/:commentId`, isAdmin, async (req, res) => {
     try {
         const { postId, commentId } = req.params;
         const post = await getPostContent(postId);
@@ -647,7 +786,13 @@ app.delete('/api/posts/:postId/comments/:commentId', isAdmin, async (req, res) =
     }
 });
 
+// ========== 梯子路径 ==========
+app.get(`${BASE_PATH}/p/:id`, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 // ---------- 启动 ----------
 app.listen(PORT, () => {
-    console.log(`博客服务已启动: http://localhost:${PORT}`);
+    console.log(`博客服务已启动: http://localhost:${PORT}${BASE_PATH}`);
+    console.log(`访问地址: http://localhost:${PORT}${BASE_PATH}/`);
 });

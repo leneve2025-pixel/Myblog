@@ -86,22 +86,15 @@
         }
         body.dark .blog-card { background: #2a2a2a; border-left-color: var(--theme-color, #4CAF50); }
         .blog-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.08); transform: translateY(-2px); }
-        .blog-card h3 {
-            font-size: 20px;
-            font-weight: 500;
-            margin-bottom: 4px;
-            display: flex;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 6px;
-        }
-        .blog-card .avatar-circle {
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
+        .blog-card h3 { font-size: 20px; font-weight: 500; margin-bottom: 4px; }
+        .blog-card .cover-img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 12px;
+            margin-top: 8px;
+            max-height: 200px;
             object-fit: cover;
-            border: 2px solid #ddd;
-            flex-shrink: 0;
+            display: block;
         }
         .meta { font-size: 13px; color: #888; display: flex; gap: 16px; flex-wrap: wrap; }
         .summary { margin-top: 10px; color: #555; font-weight: 300; line-height: 1.5; }
@@ -109,45 +102,15 @@
 
         .detail-back { color: var(--theme-color, #4CAF50); cursor: pointer; font-weight: 500; display: inline-block; margin-bottom: 16px; }
         .detail-title { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
-        .detail-meta {
-            font-size: 14px;
-            color: #888;
-            margin-bottom: 16px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-        .detail-meta .avatar-circle {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 2px solid #ddd;
-        }
+        .detail-meta { font-size: 14px; color: #888; margin-bottom: 16px; }
         .detail-content { font-size: 16px; line-height: 1.8; white-space: pre-wrap; word-wrap: break-word; margin-bottom: 24px; }
         .detail-content img { max-width: 100%; border-radius: 12px; margin: 8px 0; }
 
         .comments-section { margin-top: 32px; border-top: 1px solid #ddd; padding-top: 20px; }
         body.dark .comments-section { border-top-color: #444; }
         .comments-section h4 { font-size: 18px; font-weight: 500; margin-bottom: 16px; }
-        .comment-item {
-            padding: 12px 0;
-            border-bottom: 1px solid #eee;
-            display: flex;
-            gap: 10px;
-            align-items: flex-start;
-        }
+        .comment-item { padding: 12px 0; border-bottom: 1px solid #eee; }
         body.dark .comment-item { border-bottom-color: #333; }
-        .comment-item .avatar-circle {
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 1px solid #ddd;
-            flex-shrink: 0;
-        }
-        .comment-body { flex: 1; }
         .comment-author { font-weight: 500; font-size: 14px; }
         .comment-time { font-size: 12px; color: #999; margin-left: 12px; }
         .comment-content { margin-top: 4px; font-size: 15px; }
@@ -199,15 +162,52 @@
         .publish-toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
         .publish-toolbar button { background: var(--theme-color, #4CAF50); color: #fff; border: none; padding: 6px 16px; border-radius: 20px; cursor: pointer; font-size: 14px; }
         .publish-toolbar button:hover { opacity: 0.8; }
+        .cover-preview { max-width: 100%; max-height: 200px; border-radius: 12px; margin-top: 8px; display: none; }
         .file-input-label { display: inline-block; background: var(--theme-color, #4CAF50); color: #fff; padding: 6px 16px; border-radius: 20px; cursor: pointer; font-size: 14px; }
         .file-input-label:hover { opacity: 0.8; }
         .file-input-label input { display: none; }
-        .avatar-preview {
-            width: 60px;
-            height: 60px;
+
+        /* 加载圈 */
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #f5f5f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.5s;
+        }
+        #loading-screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #e0e0e0;
+            border-top: 4px solid var(--theme-color, #4CAF50);
             border-radius: 50%;
-            object-fit: cover;
-            border: 2px solid #ddd;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #loading-screen p { margin-top: 20px; color: #888; font-size: 16px; }
+        #loading-error { margin-top: 10px; color: #e17055; font-size: 14px; display: none; }
+        #retry-btn {
+            margin-top: 10px;
+            padding: 8px 20px;
+            background: var(--theme-color, #4CAF50);
+            color: #fff;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
             display: none;
         }
 
@@ -221,6 +221,15 @@
     </style>
 </head>
 <body>
+
+<!-- ===== 加载圈 ===== -->
+<div id="loading-screen">
+    <div class="spinner"></div>
+    <p>加载中...</p>
+    <p id="loading-error"></p>
+    <button id="retry-btn" onclick="location.reload()">重试</button>
+</div>
+
 <div class="container">
     <header>
         <div class="logo"><i class="fas fa-feather-alt"></i> <span id="site-title">MyBlog</span></div>
@@ -249,13 +258,22 @@
         <div id="view-publish" class="view">
             <h2 style="font-weight:300; font-size:26px; margin-bottom:16px;"><i class="fas fa-feather-alt"></i> 发布新文章</h2>
             <div class="admin-section">
-                <input type="text" id="pub-title" placeholder="文章标题" style="width:100%; padding:12px; border-radius:16px; border:1px solid #ddd; font-size:16px;" />
+                <input type="text" id="pub-title" placeholder="文章标题" style="width:100%; padding:12px; border-radius:16px; border:1px solid #ddd; font-size:16px;" oninput="saveDraft()" />
+                <div style="margin:12px 0;">
+                    <label class="file-input-label">
+                        <i class="fas fa-image"></i> 选择封面图片
+                        <input type="file" id="cover-upload" accept="image/*" />
+                    </label>
+                    <span style="margin-left:12px; color:#888; font-size:14px;">（或粘贴网络图片URL）</span>
+                    <input type="text" id="pub-cover-url" placeholder="或直接粘贴图片URL" style="width:100%; margin-top:8px; padding:10px; border-radius:16px; border:1px solid #ddd;" oninput="saveDraft()" />
+                    <img id="cover-preview" class="cover-preview" alt="封面预览" />
+                </div>
                 <div style="margin:12px 0;">
                     <div class="publish-toolbar">
                         <button onclick="insertImage()"><i class="fas fa-image"></i> 插入图片</button>
                         <input type="file" id="image-upload" accept="image/*" style="display:none;" />
                     </div>
-                    <textarea id="pub-content" placeholder="正文内容（支持Markdown图片语法 ![]()）" style="width:100%; min-height:200px; padding:12px; border-radius:16px; border:1px solid #ddd; font-size:15px; line-height:1.6; resize:vertical;"></textarea>
+                    <textarea id="pub-content" placeholder="正文内容（支持Markdown图片语法 ![]()）" style="width:100%; min-height:200px; padding:12px; border-radius:16px; border:1px solid #ddd; font-size:15px; line-height:1.6; resize:vertical;" oninput="saveDraft()"></textarea>
                 </div>
                 <button id="publish-btn" class="submit-btn" onclick="handlePublish()"><i class="fas fa-paper-plane"></i> 发布文章</button>
             </div>
@@ -294,14 +312,14 @@
                     </div>
                     <!-- 修改头像 -->
                     <div class="admin-section admin-only">
-                        <h4><i class="fas fa-user-circle"></i> 修改我的头像</h4>
+                        <h4><i class="fas fa-user-circle"></i> 修改头像</h4>
                         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                            <img id="avatar-preview" class="avatar-preview" alt="当前头像" />
+                            <img id="avatar-preview" src="" alt="当前头像" style="width:60px; height:60px; border-radius:50%; object-fit:cover; border:2px solid #ddd; display:none;" />
                             <label class="file-input-label">
                                 <i class="fas fa-upload"></i> 选择图片
                                 <input type="file" id="avatar-upload" accept="image/*" />
                             </label>
-                            <span style="color:#888; font-size:13px;">（建议小于200KB）</span>
+                            <input type="text" id="avatar-url" placeholder="或粘贴图片URL" style="flex:1; min-width:150px; padding:8px 12px; border-radius:16px; border:1px solid #ddd;" />
                             <button class="submit-btn" onclick="handleUpdateAvatar()">保存头像</button>
                         </div>
                     </div>
@@ -319,6 +337,7 @@
                         <h4><i class="fas fa-plus-circle"></i> 发布新文章</h4>
                         <form class="add-form" onsubmit="handleAddPost(event)">
                             <input type="text" id="add-title" placeholder="标题" required />
+                            <input type="text" id="add-cover" placeholder="封面图URL（可选）" />
                             <textarea id="add-content" placeholder="正文" required></textarea>
                             <button type="submit" class="submit-btn">发布</button>
                         </form>
@@ -350,19 +369,47 @@
         </div>
     </div>
 </div>
+
 <div class="toast-container" id="toast-container"></div>
 
 <script>
     // ============================================================
-    //  前端逻辑（支持头像 Base64，移除封面）
+    //  自动检测子路径
     // ============================================================
-    const API_BASE = '/api';
+    const BASE_PATH = window.location.pathname.match(/^\/[^\/]+/)?.[0] || '';
+    const API_BASE = BASE_PATH + '/api';
+
+    // ============================================================
+    //  全局状态
+    // ============================================================
     let currentUser = null;
     let posts = [];
     let currentView = 'home';
     let blogTitle = '我的博客';
     let themeColor = '#4CAF50';
+    let appLoaded = false;
 
+    // ============================================================
+    //  加载圈控制
+    // ============================================================
+    function showLoading() {
+        document.getElementById('loading-screen').classList.remove('hidden');
+    }
+
+    function hideLoading() {
+        document.getElementById('loading-screen').classList.add('hidden');
+        appLoaded = true;
+    }
+
+    function showLoadingError(msg) {
+        document.getElementById('loading-error').textContent = msg || '加载失败，请刷新重试';
+        document.getElementById('loading-error').style.display = 'block';
+        document.getElementById('retry-btn').style.display = 'block';
+    }
+
+    // ============================================================
+    //  工具函数
+    // ============================================================
     function showToast(msg, type='info') {
         const container = document.getElementById('toast-container');
         const el = document.createElement('div');
@@ -403,6 +450,58 @@
         });
     }
 
+    // ============================================================
+    //  草稿管理
+    // ============================================================
+    function loadDraft() {
+        try {
+            const draft = localStorage.getItem('blog_draft');
+            if (draft) {
+                const data = JSON.parse(draft);
+                const titleInput = document.getElementById('pub-title');
+                const contentInput = document.getElementById('pub-content');
+                const coverInput = document.getElementById('pub-cover-url');
+                if (titleInput) titleInput.value = data.title || '';
+                if (contentInput) contentInput.value = data.content || '';
+                if (coverInput) coverInput.value = data.cover || '';
+                if (data.cover) {
+                    const preview = document.getElementById('cover-preview');
+                    if (preview) {
+                        preview.src = data.cover;
+                        preview.style.display = 'block';
+                    }
+                }
+                if (data.title || data.content) {
+                    showToast('已恢复未发布的草稿', 'info');
+                }
+            }
+        } catch (e) {}
+    }
+
+    let draftTimer = null;
+    function saveDraft() {
+        clearTimeout(draftTimer);
+        draftTimer = setTimeout(() => {
+            try {
+                const title = document.getElementById('pub-title')?.value?.trim() || '';
+                const content = document.getElementById('pub-content')?.value?.trim() || '';
+                const cover = document.getElementById('pub-cover-url')?.value?.trim() || '';
+                if (title || content || cover) {
+                    localStorage.setItem('blog_draft', JSON.stringify({ title, content, cover }));
+                } else {
+                    localStorage.removeItem('blog_draft');
+                }
+            } catch (e) {}
+        }, 3000);
+    }
+
+    function clearDraft() {
+        localStorage.removeItem('blog_draft');
+    }
+
+    // ============================================================
+    //  配置加载
+    // ============================================================
     async function loadConfig() {
         try {
             const data = await apiFetch('/config');
@@ -415,6 +514,8 @@
             if (data && data.themeColor) {
                 themeColor = data.themeColor;
                 applyThemeColor(themeColor);
+                // 更新加载圈颜色
+                document.querySelector('#loading-screen .spinner')?.style.setProperty('border-top-color', themeColor);
             }
             if (data && data.wallpaper) {
                 document.body.style.backgroundImage = `url(${data.wallpaper})`;
@@ -424,6 +525,9 @@
         }
     }
 
+    // ============================================================
+    //  文章列表
+    // ============================================================
     async function loadPosts() {
         try {
             const data = await apiFetch('/posts');
@@ -448,16 +552,20 @@
         list.innerHTML = sorted.map(p => `
             <div class="blog-card" onclick="viewPost('${p.id}')">
                 <h3>
-                    ${p.authorAvatar ? `<img src="${escapeHtml(p.authorAvatar)}" class="avatar-circle" alt="avatar" />` : ''}
-                    ${escapeHtml(p.title)} 
+                    ${p.authorAvatar ? `<img src="${escapeHtml(p.authorAvatar)}" style="width:24px; height:24px; border-radius:50%; object-fit:cover; vertical-align:middle; margin-right:6px;" />` : ''}
+                    ${escapeHtml(p.title)}
                     <span class="post-author">by ${escapeHtml(p.authorDisplay || p.author || '未知')}</span>
                 </h3>
+                ${p.cover ? `<img class="cover-img" src="${escapeHtml(p.cover)}" alt="封面" />` : ''}
                 <div class="meta"><span><i class="far fa-calendar-alt"></i> ${formatDate(p.createdAt)}</span> <span><i class="far fa-eye"></i> ${p.views||0}</span></div>
                 <div class="summary">${escapeHtml(p.content ? p.content.slice(0,120) : '')}${p.content && p.content.length>120?'...':''}</div>
             </div>
         `).join('');
     }
 
+    // ============================================================
+    //  文章详情
+    // ============================================================
     async function viewPost(id) {
         try {
             const data = await apiFetch(`/posts/${id}`);
@@ -466,12 +574,13 @@
             switchView('detail');
             document.getElementById('detail-content').innerHTML = `
                 <h1 class="detail-title">${escapeHtml(post.title)}</h1>
+                ${post.authorAvatar ? `<img src="${escapeHtml(post.authorAvatar)}" style="width:28px; height:28px; border-radius:50%; object-fit:cover; vertical-align:middle; margin-right:6px;" />` : ''}
                 <div class="detail-meta">
-                    ${post.authorAvatar ? `<img src="${escapeHtml(post.authorAvatar)}" class="avatar-circle" alt="avatar" />` : ''}
-                    <i class="far fa-calendar-alt"></i> ${formatDate(post.createdAt)} &nbsp;|&nbsp; 
-                    <i class="far fa-eye"></i> ${post.views||0} &nbsp;|&nbsp; 
+                    <i class="far fa-calendar-alt"></i> ${formatDate(post.createdAt)} &nbsp;|&nbsp;
+                    <i class="far fa-eye"></i> ${post.views||0} &nbsp;|&nbsp;
                     作者: ${escapeHtml(post.authorDisplay || post.author || '未知')}
                 </div>
+                ${post.cover ? `<img src="${escapeHtml(post.cover)}" style="max-width:100%; border-radius:12px; margin-bottom:16px;" alt="封面" />` : ''}
                 <div class="detail-content">${escapeHtml(post.content)}</div>
             `;
             renderComments(post);
@@ -481,6 +590,9 @@
         }
     }
 
+    // ============================================================
+    //  评论
+    // ============================================================
     function renderComments(post) {
         const container = document.getElementById('comments-area');
         let html = `<div class="comments-section"><h4>💬 评论 (${post.comments ? post.comments.length : 0})</h4>`;
@@ -489,13 +601,10 @@
             sorted.forEach(c => {
                 html += `
                     <div class="comment-item">
-                        ${c.authorAvatar ? `<img src="${escapeHtml(c.authorAvatar)}" class="avatar-circle" alt="avatar" />` : ''}
-                        <div class="comment-body">
-                            <span class="comment-author">${escapeHtml(c.authorDisplay || c.author)}</span>
-                            <span class="comment-time">${formatDate(c.createdAt)}</span>
-                            ${ (currentUser && (currentUser.username === c.author || currentUser.role === 'super_admin')) ? `<span class="comment-delete" onclick="deleteComment('${c.id}')"><i class="fas fa-times"></i></span>` : '' }
-                            <div class="comment-content">${escapeHtml(c.content)}</div>
-                        </div>
+                        <span class="comment-author">${escapeHtml(c.authorDisplay || c.author)}</span>
+                        <span class="comment-time">${formatDate(c.createdAt)}</span>
+                        ${ (currentUser && (currentUser.username === c.author || currentUser.role === 'super_admin')) ? `<span class="comment-delete" onclick="deleteComment('${c.id}')"><i class="fas fa-times"></i></span>` : '' }
+                        <div class="comment-content">${escapeHtml(c.content)}</div>
                     </div>
                 `;
             });
@@ -549,6 +658,9 @@
 
     function goHome() { switchView('home'); }
 
+    // ============================================================
+    //  视图切换
+    // ============================================================
     function switchView(view) {
         currentView = view;
         document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -584,102 +696,160 @@
         });
     });
 
-    // 头像上传（转为 Base64）
-    document.getElementById('avatar-upload').addEventListener('change', function(e) {
+    // ============================================================
+    //  封面和图片上传
+    // ============================================================
+    document.getElementById('cover-upload').addEventListener('change', async function(e) {
         const file = this.files[0];
         if (!file) return;
-        // 检查文件大小
-        if (file.size > 200 * 1024) {
-            showToast('图片大小不能超过200KB', 'error');
-            this.value = '';
-            return;
+        const formData = new FormData();
+        formData.append('image', file);
+        try {
+            const res = await fetch(API_BASE+'/upload', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById('pub-cover-url').value = data.url;
+                const preview = document.getElementById('cover-preview');
+                preview.src = data.url;
+                preview.style.display = 'block';
+                showToast('封面上传成功', 'success');
+            } else {
+                showToast('封面上传失败: ' + (data.error || '未知错误'), 'error');
+            }
+        } catch(err) {
+            showToast('封面上传失败: ' + err.message, 'error');
         }
-        const reader = new FileReader();
-        reader.onload = function(ev) {
-            const base64 = ev.target.result; // 完整 data:image/...;base64,...
-            document.getElementById('avatar-url')?.remove(); // 没有avatar-url输入框，我们用隐藏存储
-            // 直接显示预览
-            document.getElementById('avatar-preview').src = base64;
-            document.getElementById('avatar-preview').style.display = 'block';
-            // 保存 base64 到全局变量
-            window._tempAvatarBase64 = base64;
-            showToast('图片已加载，点击“保存头像”生效', 'info');
-        };
-        reader.readAsDataURL(file);
     });
 
-    // 保存头像
+    document.getElementById('pub-cover-url').addEventListener('input', function() {
+        const url = this.value.trim();
+        const preview = document.getElementById('cover-preview');
+        if (url) {
+            preview.src = url;
+            preview.style.display = 'block';
+        } else {
+            preview.style.display = 'none';
+        }
+    });
+
+    function insertImage() {
+        if (!currentUser) { showToast('请先登录', 'error'); return; }
+        document.getElementById('image-upload').click();
+    }
+
+    document.getElementById('image-upload').addEventListener('change', async function(e) {
+        const file = this.files[0];
+        if (!file) return;
+        const formData = new FormData();
+        formData.append('image', file);
+        try {
+            const res = await fetch(API_BASE+'/upload', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.success) {
+                const textarea = document.getElementById('pub-content');
+                const markdown = `![${file.name}](${data.url})`;
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                textarea.value = textarea.value.substring(0, start) + markdown + textarea.value.substring(end);
+                textarea.focus();
+                textarea.selectionStart = textarea.selectionEnd = start + markdown.length;
+                showToast('图片已插入', 'success');
+            } else {
+                showToast('图片上传失败: ' + (data.error || '未知错误'), 'error');
+            }
+        } catch(err) {
+            showToast('图片上传失败: ' + err.message, 'error');
+        }
+        this.value = '';
+    });
+
+    // ============================================================
+    //  头像
+    // ============================================================
+    document.getElementById('avatar-upload').addEventListener('change', async function(e) {
+        const file = this.files[0];
+        if (!file) return;
+        const formData = new FormData();
+        formData.append('image', file);
+        try {
+            const res = await fetch(API_BASE+'/upload', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById('avatar-url').value = data.url;
+                document.getElementById('avatar-preview').src = data.url;
+                document.getElementById('avatar-preview').style.display = 'block';
+                showToast('图片上传成功，点击"保存头像"生效', 'success');
+            } else {
+                showToast('上传失败: ' + (data.error || '未知错误'), 'error');
+            }
+        } catch(err) {
+            showToast('上传失败: ' + err.message, 'error');
+        }
+    });
+
+    document.getElementById('avatar-url').addEventListener('input', function() {
+        const url = this.value.trim();
+        const preview = document.getElementById('avatar-preview');
+        if (url) {
+            preview.src = url;
+            preview.style.display = 'block';
+        } else {
+            preview.style.display = 'none';
+        }
+    });
+
     async function handleUpdateAvatar() {
         if (!currentUser) { showToast('请先登录', 'error'); return; }
-        const avatar = window._tempAvatarBase64 || '';
-        if (!avatar) { showToast('请先选择一张图片', 'error'); return; }
+        const avatar = document.getElementById('avatar-url').value.trim();
+        if (!avatar) { showToast('请先上传或输入图片URL', 'error'); return; }
         try {
             await apiFetch(`/users/${currentUser.username}/avatar`, {
                 method: 'PUT',
                 body: JSON.stringify({ avatar })
             });
             showToast('头像更新成功', 'success');
-            // 更新当前用户信息
-            currentUser.avatar = avatar;
-            // 刷新首页和详情
+            document.getElementById('avatar-preview').src = avatar;
             if (currentView === 'home') loadPosts();
             if (currentView === 'detail' && window._currentPostId) viewPost(window._currentPostId);
-            // 清除临时变量
-            window._tempAvatarBase64 = '';
-            document.getElementById('avatar-preview').style.display = 'none';
         } catch(err) {
             showToast('更新失败: '+err.message, 'error');
         }
     }
 
-    // 正文图片插入（使用Base64，直接插入Markdown图片语法）
-    function insertImage() {
-        if (!currentUser) { showToast('请先登录', 'error'); return; }
-        document.getElementById('image-upload').click();
-    }
-
-    document.getElementById('image-upload').addEventListener('change', function(e) {
-        const file = this.files[0];
-        if (!file) return;
-        // 限制大小（比如 500KB）
-        if (file.size > 500 * 1024) {
-            showToast('图片不能超过500KB，请压缩后重试', 'error');
-            this.value = '';
-            return;
-        }
-        const reader = new FileReader();
-        reader.onload = function(ev) {
-            const base64 = ev.target.result;
-            const textarea = document.getElementById('pub-content');
-            const markdown = `![${file.name}](${base64})`;
-            const start = textarea.selectionStart;
-            const end = textarea.selectionEnd;
-            textarea.value = textarea.value.substring(0, start) + markdown + textarea.value.substring(end);
-            textarea.focus();
-            textarea.selectionStart = textarea.selectionEnd = start + markdown.length;
-            showToast('图片已插入（Base64）', 'success');
-        };
-        reader.readAsDataURL(file);
-        this.value = '';
-    });
-
-    // 发布文章（无封面）
+    // ============================================================
+    //  发布文章（含链接复制）
+    // ============================================================
     async function handlePublish() {
         if (!currentUser) { showToast('请先登录', 'error'); return; }
         const title = document.getElementById('pub-title').value.trim();
         const content = document.getElementById('pub-content').value.trim();
+        const cover = document.getElementById('pub-cover-url').value.trim();
         if (!title || !content) {
             showToast('标题和内容不能为空', 'error');
             return;
         }
         try {
-            await apiFetch('/posts', {
+            const data = await apiFetch('/posts', {
                 method: 'POST',
-                body: JSON.stringify({ title, content })
+                body: JSON.stringify({ title, content, cover })
             });
-            showToast('发布成功！', 'success');
+
+            if (data.url) {
+                showToast(`✅ 发布成功！链接已生成`, 'success');
+                setTimeout(() => {
+                    if (confirm(`文章已发布！\n访问链接：${data.url}\n点击"确定"复制链接到剪贴板`)) {
+                        navigator.clipboard?.writeText(data.url);
+                    }
+                }, 500);
+            } else {
+                showToast('发布成功！', 'success');
+            }
+
             document.getElementById('pub-title').value = '';
             document.getElementById('pub-content').value = '';
+            document.getElementById('pub-cover-url').value = '';
+            document.getElementById('cover-preview').style.display = 'none';
+            clearDraft();
             if (currentView === 'home') loadPosts();
             switchView('home');
         } catch(err) {
@@ -687,7 +857,9 @@
         }
     }
 
-    // 管理后台
+    // ============================================================
+    //  管理后台
+    // ============================================================
     async function loadAdminPanel() {
         try {
             const data = await apiFetch('/auth/status');
@@ -709,12 +881,10 @@
                     document.querySelectorAll('.super-only').forEach(el => el.style.display = 'none');
                 }
                 document.getElementById('display-name-input').value = currentUser.displayName || currentUser.username;
-                // 显示当前头像（如果有）
                 if (currentUser.avatar) {
                     document.getElementById('avatar-preview').src = currentUser.avatar;
                     document.getElementById('avatar-preview').style.display = 'block';
-                } else {
-                    document.getElementById('avatar-preview').style.display = 'none';
+                    document.getElementById('avatar-url').value = currentUser.avatar;
                 }
                 await loadAdminPosts();
                 if (currentUser.role === 'super_admin') loadUserList();
@@ -758,6 +928,9 @@
         `).join('');
     }
 
+    // ============================================================
+    //  用户管理
+    // ============================================================
     async function loadUserList() {
         if (!currentUser || currentUser.role !== 'super_admin') return;
         try {
@@ -782,7 +955,6 @@
         }
     }
 
-    // 各种操作函数（与之前相同，略去重复，但保留完整）
     async function handleCreateUser() {
         const username = document.getElementById('new-username').value.trim();
         const password = document.getElementById('new-password').value.trim();
@@ -816,6 +988,9 @@
         }
     }
 
+    // ============================================================
+    //  显示名
+    // ============================================================
     async function handleUpdateDisplayName() {
         if (!currentUser) { showToast('请先登录', 'error'); return; }
         const newName = document.getElementById('display-name-input').value.trim();
@@ -834,6 +1009,9 @@
         }
     }
 
+    // ============================================================
+    //  密码
+    // ============================================================
     async function handleChangePassword() {
         if (!currentUser) { showToast('请先登录', 'error'); return; }
         const oldPwd = document.getElementById('old-pwd').value.trim();
@@ -867,6 +1045,9 @@
         }
     }
 
+    // ============================================================
+    //  标题
+    // ============================================================
     async function handleUpdateTitle() {
         if (!currentUser || currentUser.role !== 'super_admin') {
             showToast('权限不足', 'error');
@@ -889,6 +1070,9 @@
         }
     }
 
+    // ============================================================
+    //  清空文章
+    // ============================================================
     async function handleClearAllPosts() {
         if (!currentUser || currentUser.role !== 'super_admin') {
             showToast('权限不足', 'error');
@@ -906,6 +1090,9 @@
         }
     }
 
+    // ============================================================
+    //  登录/登出
+    // ============================================================
     async function handleLogin() {
         const username = document.getElementById('login-username').value.trim();
         const password = document.getElementById('login-password').value.trim();
@@ -946,20 +1133,25 @@
         }
     }
 
+    // ============================================================
+    //  快捷发布（管理后台）
+    // ============================================================
     async function handleAddPost(e) {
         e.preventDefault();
         if (!currentUser) { showToast('请先登录', 'error'); return; }
         const title = document.getElementById('add-title').value.trim();
         const content = document.getElementById('add-content').value.trim();
+        const cover = document.getElementById('add-cover').value.trim();
         if (!title || !content) { showToast('标题和内容不能为空', 'error'); return; }
         try {
             await apiFetch('/posts', {
                 method: 'POST',
-                body: JSON.stringify({ title, content })
+                body: JSON.stringify({ title, content, cover })
             });
             showToast('发布成功', 'success');
             document.getElementById('add-title').value = '';
             document.getElementById('add-content').value = '';
+            document.getElementById('add-cover').value = '';
             await loadAdminPosts();
             if (currentView === 'home') loadPosts();
         } catch(err) {
@@ -980,6 +1172,7 @@
         }
     }
 
+    // 回车登录
     document.getElementById('login-password').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') handleLogin();
     });
@@ -987,19 +1180,48 @@
         if (e.key === 'Enter') handleLogin();
     });
 
+    // ============================================================
+    //  初始化
+    // ============================================================
     window.onload = async function() {
-        await loadConfig();
-        switchView('home');
+        showLoading();
         try {
-            const status = await apiFetch('/auth/status');
-            if (status.isAdmin && status.user) {
-                currentUser = status.user;
-                await loadConfig();
+            await loadConfig();
+            loadDraft();
+
+            // 检测梯子路径 /p/文章ID
+            const path = window.location.pathname;
+            const match = path.match(/\/p\/([a-f0-9]+)/);
+            if (match) {
+                const postId = match[1];
+                switchView('detail');
+                await viewPost(postId);
+                if (window.history && window.history.pushState) {
+                    const cleanUrl = window.location.origin + window.location.pathname.replace(/\/p\/[a-f0-9]+/, '');
+                    window.history.pushState({}, '', cleanUrl);
+                }
+                hideLoading();
+                return;
             }
-        } catch (e) {}
+
+            switchView('home');
+            try {
+                const status = await apiFetch('/auth/status');
+                if (status.isAdmin && status.user) {
+                    currentUser = status.user;
+                    await loadConfig();
+                }
+            } catch (e) {}
+            hideLoading();
+        } catch (err) {
+            console.error('初始化失败:', err);
+            showLoadingError(err.message || '加载失败，请刷新重试');
+        }
     };
 
-    // 暴露全局函数
+    // ============================================================
+    //  暴露全局
+    // ============================================================
     window.viewPost = viewPost;
     window.goHome = goHome;
     window.handleLogin = handleLogin;
@@ -1019,6 +1241,7 @@
     window.switchView = switchView;
     window.handlePublish = handlePublish;
     window.insertImage = insertImage;
+    window.saveDraft = saveDraft;
 </script>
 </body>
 </html>
