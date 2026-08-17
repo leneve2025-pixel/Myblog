@@ -570,10 +570,12 @@
     // ============================================================
     async function viewPost(id) {
         try {
+            switchView('detail');
+            document.getElementById('detail-content').innerHTML =
+                '<div style="text-align:center;padding:50px 0;"><div class="spinner" style="margin:0 auto;"></div><p style="margin-top:16px;color:#888;">加载中...</p></div>';
             const data = await apiFetch(`/posts/${id}`);
             const post = data.post;
             if (!post) throw new Error('文章不存在');
-            switchView('detail');
             document.getElementById('detail-content').innerHTML = `
                 <h1 class="detail-title">${escapeHtml(post.title)}</h1>
                 ${post.authorAvatar ? `<img src="${escapeHtml(post.authorAvatar)}" style="width:28px; height:28px; border-radius:50%; object-fit:cover; vertical-align:middle; margin-right:6px;" />` : ''}
@@ -588,6 +590,8 @@
             renderComments(post);
             window._currentPostId = id;
         } catch(err) {
+            const dc = document.getElementById('detail-content');
+            if (dc) dc.innerHTML = `<div class="empty-tip" style="text-align:center;padding:50px 0;color:#e17055;">加载失败：${escapeHtml(err.message)}</div>`;
             showToast('加载文章失败: '+err.message, 'error');
         }
     }
@@ -1193,6 +1197,11 @@
     // ============================================================
     window.onload = async function() {
         showLoading();
+        // 防卡死：若 8 秒仍未加载完（多为服务冷启动），给出提示而非无限转圈
+        const slowTimer = setTimeout(() => {
+            const p = document.querySelector('#loading-screen p');
+            if (p && !appLoaded) p.textContent = '正在连接服务器，若长时间无响应可能是服务正在冷启动，请稍候或刷新重试…';
+        }, 8000);
         try {
             // 一次性获取：站点配置 + 文章列表 + 登录态（原来需要 3 次往返，现合并为 1 次）
             const data = await apiFetch('/bootstrap');
@@ -1245,9 +1254,12 @@
             switchView('home');
             hideLoading();
         } catch (err) {
+            clearTimeout(slowTimer);
             console.error('初始化失败:', err);
             showLoadingError(err.message || '加载失败，请刷新重试');
+            return;
         }
+        clearTimeout(slowTimer);
     };
 
     // ============================================================

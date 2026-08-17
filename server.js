@@ -809,7 +809,8 @@ wrapApi('/api/posts/:id', async (req, res) => {
         post.authorDisplay = user ? (user.displayName || user.username) : (post.author || '未知');
         post.authorAvatar = user ? (user.avatar || '') : '';
         post.views = (post.views || 0) + 1;
-        await savePostContent(req.params.id, post, '更新阅读数');
+        // 阅读数异步落库：不阻塞文章打开，避免每次打开都等一次 GitHub 写入
+        savePostContent(req.params.id, post, '更新阅读数').catch(e => console.error('更新阅读数失败:', e.message));
         res.json({ post });
     } catch (err) {
         console.error('获取文章详情错误:', err.message);
