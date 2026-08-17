@@ -117,6 +117,15 @@ async function deleteFile(path, sha, message) {
     }
 }
 
+// 读取客户端 cookie（无需额外依赖）
+function getCookie(req, name) {
+    const header = req.headers.cookie;
+    if (!header) return null;
+    const pair = header.split(';').map(c => c.trim()).find(c => c.startsWith(name + '='));
+    if (!pair) return null;
+    try { return decodeURIComponent(pair.slice(name.length + 1)); } catch { return null; }
+}
+
 // ---------- 索引 ----------
 async function getIndex() {
     if (isCacheValid('index')) return cache.index;
@@ -341,12 +350,18 @@ app.get('/', (req, res) => {
 // 静态文件公共访问
 app.use(express.static('public'));
 
-// ---------- 会话 ----------
+// ---------- 会话（Cookie 持久化） ----------
+app.set('trust proxy', 1); // 支持 Render 等反向代理下的 secure cookie
 app.use(session({
     secret: 'myblog-secret-key',
     resave: false,
     saveUninitialized: false,
-    cookie: { maxAge: 24 * 60 * 60 * 1000 }
+    cookie: {
+        httpOnly: true,       // JS 无法读取，防 XSS 窃取
+        sameSite: 'lax',      // 防 CSRF
+        secure: 'auto',       // HTTPS 下自动加 secure
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 登录态保留 7 天
+    }
 }));
 
 // ============================================================
@@ -483,27 +498,46 @@ async function isSuperAdmin(req, res, next) {
 // ---------- API 路由（自动适配路径） ----------
 // 使用正则匹配，同时支持 /api/xxx 和 /xxx/api/xxx
 
-function wrapApi(path, handler) {
-    // 匹配 /api/xxx 和 /:prefix/api/xxx
-    app.get(path, handler);
+function wrapApi(path, middleware, handler) {
+    // 兼容两种写法：
+    //   wrapApi(path, handler)               -> 无鉴权中间件
+    //   wrapApi(path, middleware, handler)   -> 带鉴权中间件（原 3 参数写法，旧实现会丢失 handler，已修复）
+    let mw = null, h = null;
+    if (handler === undefined) {
+        h = middleware;   // 2 参数形式
+    } else {
+        mw = middleware;  // 3 参数形式
+        h = handler;
+    }
+
+    if (mw) {
+        app.get(path, mw, h);
+        app.post(path, mw, h);
+        app.put(path, mw, h);
+        app.delete(path, mw, h);
+    } else {
+        app.get(path, h);
+        app.post(path, h);
+        app.put(path, h);
+        app.delete(path, h);
+    }
+
+    // 子路径前缀重分发（/xxx/api/... -> /api/...）
     app.get(/^\/([^\/]+)\/api\/.*/, (req, res) => {
         const newPath = req.path.replace(/^\/[^\/]+\/api/, '/api');
         req.url = newPath;
         app.handle(req, res);
     });
-    app.post(path, handler);
     app.post(/^\/([^\/]+)\/api\/.*/, (req, res) => {
         const newPath = req.path.replace(/^\/[^\/]+\/api/, '/api');
         req.url = newPath;
         app.handle(req, res);
     });
-    app.put(path, handler);
     app.put(/^\/([^\/]+)\/api\/.*/, (req, res) => {
         const newPath = req.path.replace(/^\/[^\/]+\/api/, '/api');
         req.url = newPath;
         app.handle(req, res);
     });
-    app.delete(path, handler);
     app.delete(/^\/([^\/]+)\/api\/.*/, (req, res) => {
         const newPath = req.path.replace(/^\/[^\/]+\/api/, '/api');
         req.url = newPath;
@@ -911,31 +945,47 @@ wrapApi('/api/posts', isSuperAdmin, async (req, res) => {
     }
 });
 
-// ---------- 评论 ----------
-wrapApi('/api/posts/:id/comments', isAdmin, async (req, res) => {
+// ---------- 评论（支持未登录匿名评论） ----------
+wrapApi('/api/posts/:id/comments', async (req, res) => {
     try {
         const postId = req.params.id;
-        const { content } = req.body;
+        const { content, authorName } = req.body;
         if (!content || content.trim() === '') {
             return res.status(400).json({ error: '评论内容不能为空' });
         }
         const post = await getPostContent(postId);
         if (!post) return res.status(404).json({ error: '文章不存在' });
 
-        const usersData = await getUsers();
-        const user = usersData.users.find(u => u.username === req.user.username);
-        const displayName = user ? (user.displayName || user.username) : req.user.username;
-
         const comment = {
             id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-            author: req.user.username,
-            authorDisplay: displayName,
-            content: content.trim(),
+            content: content.trim().slice(0, 1000),
             createdAt: Date.now()
         };
+
+        if (req.session && req.session.username) {
+            // 已登录：使用账号身份
+            const usersData = await getUsers();
+            const user = usersData.users.find(u => u.username === req.session.username);
+            comment.author = req.session.username;
+            comment.authorDisplay = user ? (user.displayName || user.username) : req.session.username;
+            comment.isGuest = false;
+        } else {
+            // 未登录：匿名评论，用户名默认 X（可用 cookie 记住自定义昵称）
+            let guestName = ((authorName || '').toString().trim().slice(0, 24)) || getCookie(req, 'guest_name') || 'X';
+            if (!guestName) guestName = 'X';
+            res.cookie('guest_name', guestName, {
+                maxAge: 365 * 24 * 60 * 60 * 1000,
+                httpOnly: false,
+                sameSite: 'lax'
+            });
+            comment.author = 'guest';
+            comment.authorDisplay = guestName;
+            comment.isGuest = true;
+        }
+
         if (!post.comments) post.comments = [];
         post.comments.push(comment);
-        await savePostContent(postId, post, `添加评论`);
+        await savePostContent(postId, post, '添加评论');
         res.json({ success: true, comment });
     } catch (err) {
         console.error('添加评论错误:', err);
