@@ -183,7 +183,7 @@ async function getConfig() {
     if (isCacheValid('config')) return cache.config;
     const content = await getFileContent(CONFIG_PATH);
     if (!content) {
-        return { blogTitle: '我的博客', themeColor: '#4CAF50', wallpaper: '' };
+        return { blogTitle: '我的博客', themeColor: '#4A2C1A', wallpaper: '' };
     }
     try {
         const parsed = JSON.parse(content);
@@ -194,7 +194,7 @@ async function getConfig() {
         cache.configTime = Date.now();
         return parsed;
     } catch {
-        return { blogTitle: '我的博客', themeColor: '#4CAF50', wallpaper: '' };
+        return { blogTitle: '我的博客', themeColor: '#4A2C1A', wallpaper: '' };
     }
 }
 
