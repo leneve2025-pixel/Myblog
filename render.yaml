@@ -1,0 +1,21 @@
+# Render 部署配置（GitHub -> Render）
+# 用法：在 Render 新建 Blueprint，选择本仓库，即可按此文件自动部署。
+# 注意：SSH_PASSWORD 为敏感项，不写入本文件，请在 Render 后台 Environment 手动添加。
+services:
+  - type: web
+    name: myblog
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: SSH_HOST
+        value: wh.frp.one
+      - key: SSH_PORT
+        value: "58373"
+      - key: SSH_USER
+        value: xiaohai
+      - key: SSH_BASE_DIR
+        value: /BLOG
