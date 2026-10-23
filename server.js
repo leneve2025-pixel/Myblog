@@ -52,10 +52,11 @@ async function getSftp() {
             port: CONFIG.SSH_PORT,
             username: CONFIG.SSH_USER,
             password: CONFIG.SSH_PASSWORD,
-            readyTimeout: 20000,
-            retries: 2,
-            retry_factor: 1,
-            retry_minTimeout: 1000
+            readyTimeout: 60000,
+            retries: 3,
+            retry_factor: 1.5,
+            retry_minTimeout: 2000,
+            keepaliveInterval: 10000
         });
         // 确保 /BLOG、/BLOG/posts、/BLOG/uploads 存在
         for (const sub of ['', 'posts', 'uploads']) {
